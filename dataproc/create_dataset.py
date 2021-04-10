@@ -21,9 +21,9 @@ cursor = connect(s3_staging_dir='s3://'+athena_query_results_bucket+'/athena/tem
 
 # The above code comes directly from aline-awsathena.ipynb in the MIMIC-III starter code
 
-def lab_events(hadm_ids):
+def lab_events(hadm_ids: list, observation_window_hours: float):
     hadm_ids = ','.join(map(str, hadm_ids))
-    statement = """
+    statement = f"""
     SELECT E.subject_id,
              E.hadm_id,
              E.itemid,
@@ -38,9 +38,17 @@ def lab_events(hadm_ids):
     FROM mimiciii.labevents E
     LEFT JOIN mimiciii.d_labitems I
         ON E.itemid=I.itemid
-    WHERE E.hadm_id IN ({});
-    """.format(hadm_ids)
-    df = cursor.execute(statement).as_pandas()
+    JOIN mimiciii.admissions
+        ON E.hadm_id=admissions.hadm_id
+    WHERE E.charttime <= admissions.admittime + interval %(time_window_hours)s hour
+            AND (lower(I.fluid) LIKE '%%blood%%'
+            OR lower(I.fluid) LIKE '%%urine%%')
+    AND E.hadm_id in ({hadm_ids})
+    """
+    params = {
+        'time_window_hours': str(observation_window_hours)
+    }
+    df = cursor.execute(statement, params ).as_pandas()
     return df
 
 def important_labs():
@@ -113,9 +121,9 @@ def static_data(hadm_ids):
     df = cursor.execute(statement).as_pandas()
     return df
 
-def dataset_creation(hadm_ids):
+def dataset_creation(hadm_ids: list, observation_window_hours: float):
     static_df = static_data(hadm_ids)
-    lab_df = lab_events(hadm_ids)
+    lab_df = lab_events(hadm_ids, observation_window_hours)
     ilabs_df = important_labs()
     df = lab_df.merge(ilabs_df, how='right', on=['itemid','label','fluid','category','loinc_code'])
     df = df.drop(df.index[df['cnt'] < 100].tolist())

@@ -106,7 +106,7 @@ SELECT
     admits.deathtime, 
     null microb.charttime,
     admits.admittime + interval %(time_window_hours)s hour as diff,
-    null death_before_rslt,
+    CASE WHEN admits.deathtime < admits.admittime + interval %(time_window_hours)s THEN 1 ELSE 0 END AS death_before_rslt,
     1 time_to_rslt,
     null org_itemid, 
     null org_name,

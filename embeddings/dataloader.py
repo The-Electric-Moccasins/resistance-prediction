@@ -8,12 +8,9 @@ class TheDataSet(Dataset):
     def __init__(self, datafile='data/fulldata.npy', pad_to_360=True):
         """
         Args:
-            csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
+            datafile (string): Path to the data file
         """
-        fulldata = np.load(datafile)
+        fulldata = np.load(datafile, allow_pickle=True)
         self.X = fulldata[:, :-1]
         self.y = fulldata[:, -1]
         _, vector_len = self.X.shape

@@ -8,20 +8,20 @@ class Autoencoder(nn.Module):
         super(Autoencoder, self).__init__()
         self.encoder = nn.Sequential(
             nn.Linear(in_features=num_features, out_features=256 , bias=True),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(in_features=256, out_features=128, bias=True),
-            nn.ReLU(),
-            nn.Linear(in_features=128, out_features=64, bias=True),
-            nn.ReLU()
+            nn.Tanh(),
+            nn.Linear(in_features=128, out_features=32, bias=True),
+            nn.Tanh()
         )
         self.decoder = nn.Sequential(
-            nn.Linear(in_features=64, out_features=128, bias=True),
-            nn.ReLU(),
+            nn.Linear(in_features=32, out_features=128, bias=True),
+            nn.Tanh(),
             nn.Linear(in_features=128, out_features=256, bias=True),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(in_features=256, out_features=num_features, bias=True ),
             #nn.Sigmoid()
-            nn.ReLU()
+            nn.Tanh()
 #             nn.Tanh()
         )
 

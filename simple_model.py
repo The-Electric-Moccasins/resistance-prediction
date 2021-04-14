@@ -24,7 +24,7 @@ def get_autoencoder():
 
 
 def load_data():
-    dataset = TheDataSet(datafile='data/fulldata.npy')
+    dataset = TheDataSet(datafile='data/fulldata.npy', pad_to_360=False)
     data_loader = torch.utils.data.DataLoader(dataset)
     if USE_AUTOENCODER:
         print("Using AutoEncoder")
@@ -74,12 +74,12 @@ X_validate = df_validation.drop(columns=['y'])
 y_validate = df_validation['y']
 print(f"Train shape: {X_train.shape}")
 print(f"Validate shape: {X_validate.shape}")
-rf = RandomForestClassifier(max_features=40, max_depth=8, n_estimators=90, min_samples_leaf=5, random_state=7)
+rf = RandomForestClassifier(max_features=20, max_depth=None, n_estimators=90, min_samples_leaf=5, random_state=7)
 rf.fit(X_train, y_train)
 y_validate_hat = rf.predict(X_validate)
 simple_score = rf.score(X_validate, y_validate)
 print(f"simple_score: {simple_score}")
 # scoring = {'AUC': 'roc_auc', 'Accuracy': 'accuracy', 'Precision': 'precision', 'Recall': 'recall'}
-scoring = ['roc_auc','accuracy','precision', 'recall']
+scoring = ['roc_auc','accuracy','precision', 'recall', 'f1']
 cv_scores = cross_validate(rf, X_train, y_train, scoring=scoring)
 print_accuracy(cv_scores)

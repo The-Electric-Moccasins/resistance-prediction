@@ -22,8 +22,10 @@ data_file_name = f'{DATA_DIR}/fulldata.npy'
 
 def main():
     esbl_admits = cohort_query()
+    print(f"loaded {esbl_admits.shape[0]} patients")
     # Remove dups
     esbl_admits = remove_dups(esbl_admits)
+    print("removed dups")
     # Create observation window
     esbl_admits_window = observation_window(esbl_admits, window_size=params.observation_window_hours)
     # Subset columns
@@ -134,7 +136,7 @@ def main():
             p75 = ref_df[code]['75%']
             df[code] = (df[code] - median) / (p75 - p25)
         return df
-
+    print("stanardize_numeric_values")
     dataset = stanardize_numeric_values(dataset, numeric, numeric_stats_df)
 
 
@@ -196,6 +198,7 @@ def main():
     dataset.update(dataset[categorical].fillna('UNKNOWN'))
 
     # Use one hot encoder for categoric lab features:
+    print("One Hot Encoding")
 
     enc = OneHotEncoder()
     enc.fit(dataset[categorical])

@@ -8,3 +8,5 @@
 /.idea
 *.pkl
 /data
+/data_ae_train
+/runs*

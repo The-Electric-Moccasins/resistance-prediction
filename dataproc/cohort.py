@@ -92,6 +92,52 @@ WHERE admissions.time_to_rslt <> '<=00h' AND
 
     return df
 
+def query_all_pts(observation_window_hours):
+    """
+    Query to select esbl microbiology tests
+    and link them to patient's admission time
+    """
+    query = """
+    WITH admissions AS (
+    SELECT
+        admits.subject_id,
+        admits.hadm_id,
+        admits.admittime,
+        admits.deathtime, 
+        (admits.admittime + interval %(time_window_hours)s hour + interval '1' hour) charttime,
+        (admits.admittime + interval %(time_window_hours)s hour) as diff,
+        CASE WHEN admits.deathtime < (admits.admittime + interval %(time_window_hours)s hour) THEN 1 ELSE 0 END AS death_before_rslt,
+        1 time_to_rslt,
+        null org_itemid, 
+        null org_name,
+        0 RESISTANT_YN,
+        1 SENSITIVE_YN
+    FROM mimiciii.admissions admits
+    )
+    SELECT         
+        admissions.subject_id,
+        admissions.hadm_id,
+        admissions.admittime,
+        admissions.charttime,
+        admissions.diff,
+        admissions.time_to_rslt,
+        RESISTANT_YN,
+        SENSITIVE_YN
+    FROM admissions
+    WHERE 
+          admissions.death_before_rslt != 1 
+    order by random()
+    limit 10000
+    
+    """
+    params = {
+        'time_window_hours': str(observation_window_hours)
+    }
+    cursor.execute(query, params)
+    df = as_pandas(cursor)
+
+    return df
+
 
 def remove_dups(df):
     """

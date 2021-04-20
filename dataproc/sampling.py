@@ -4,7 +4,7 @@ from pandas import DataFrame
 from sklearn.model_selection import train_test_split
 
 
-def generate_samples(df_dataset: DataFrame, negative_to_positive_ratio: float, test_set_fraction : float, validation_set_fraction: float, random_state: int):
+def generate_samples(df_dataset: DataFrame, negative_to_positive_ratio: float, test_set_fraction : float, validation_set_fraction: float, random_state: int, by_column:str = 'RESISTANT_YN'):
     """
     Convert a dataset to train/validation/test samples. The train dataset can have a specified negative/positive ratio.
 
@@ -25,9 +25,9 @@ def generate_samples(df_dataset: DataFrame, negative_to_positive_ratio: float, t
     df_train, df_validation, df_test = split_train_val_test(df_dataset, test_set_fraction, validation_set_fraction, random_state)
 
     # stratify the train set
-    train_set = stratify_set(df_train, negative_to_positive_ratio)
+    train_set = stratify_set(df_train, negative_to_positive_ratio, by_column=by_column)
 
-    return df_train, df_validation, df_test
+    return train_set, df_validation, df_test
 
 
 def stratify_set(df: DataFrame, negative_to_positive_ratio: float, by_column:str = 'RESISTANT_YN'):
@@ -36,7 +36,7 @@ def stratify_set(df: DataFrame, negative_to_positive_ratio: float, by_column:str
     num_negatives = n - num_positives
     target_num_positives = int(np.floor(n / (negative_to_positive_ratio + 1)))
     # if we do not have enough positives for the max train set size, use as much as available
-    target_num_positives = min(target_num_positives, num_positives)
+    target_num_positives = int(min(target_num_positives, num_positives))
     target_num_negatives = int(np.floor(negative_to_positive_ratio * target_num_positives))
     df_train_positives = df[df[by_column] == 1.0].sample(n=target_num_positives)
     upsample_negatives = target_num_negatives > num_negatives

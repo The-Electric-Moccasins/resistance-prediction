@@ -112,7 +112,8 @@ def static_data(hadm_ids):
              A.religion,
              A.marital_status,
              A.ethnicity,
-             P.gender
+             P.gender,
+             date_diff('year', P.dob, A.admittime) age
     FROM mimiciii.admissions A
     LEFT JOIN mimiciii.patients P
         ON A.subject_id=P.subject_id

@@ -21,34 +21,32 @@ cursor = connect(s3_staging_dir='s3://'+athena_query_results_bucket+'/athena/tem
 
 # The above code comes directly from aline-awsathena.ipynb in the MIMIC-III starter code
 
-def lab_events(hadm_ids: list, observation_window_hours: float):
-    hadm_ids = ','.join(map(str, hadm_ids))
+def lab_events(hadm_ids_table: str):
+#     hadm_ids = ','.join(map(str, hadm_ids))
     statement = f"""
-    SELECT E.subject_id,
-             E.hadm_id,
+    SELECT   E.hadm_id,
              E.itemid,
-             E.charttime,
-             E.value,
-             E.valueuom,
+             case 
+                 -- use valuenum if provided, otherwise the textual. See https://mimic.physionet.org/mimictables/labevents/
+                 when E.valuenum is not null then cast(E.valuenum as varchar)
+                 else E.value
+             end value,
              E.flag,
-             I.label,
-             I.fluid,
-             I.category,
-             I.loinc_code
+             E.charttime
+             -- I.label,
+             -- I.fluid,
+             -- I.category,
+             -- I.loinc_code
     FROM mimiciii.labevents E
     LEFT JOIN mimiciii.d_labitems I
         ON E.itemid=I.itemid
-    JOIN mimiciii.admissions
-        ON E.hadm_id=admissions.hadm_id
-    WHERE E.charttime <= admissions.admittime + interval %(time_window_hours)s hour
-            AND (lower(I.fluid) LIKE '%%blood%%'
-            OR lower(I.fluid) LIKE '%%urine%%')
-    AND E.hadm_id in ({hadm_ids})
+    JOIN {hadm_ids_table} admissions_list 
+        on admissions_list.hadm_id = E.hadm_id
+        AND E.charttime <=  admissions_list.index_date
+    WHERE  (lower(I.fluid) LIKE '%blood%'
+            OR lower(I.fluid) LIKE '%urine%')
     """
-    params = {
-        'time_window_hours': str(observation_window_hours)
-    }
-    df = cursor.execute(statement, params ).as_pandas()
+    df = cursor.execute(statement).as_pandas()
     return df
 
 def important_labs():

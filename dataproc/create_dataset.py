@@ -102,8 +102,7 @@ def important_labs():
 def static_data(hadm_ids_table: str):
     #hadm_ids = ','.join(map(str, hadm_ids))
     statement = f"""
-    SELECT A.subject_id,
-             A.hadm_id,
+    SELECT   A.hadm_id,
              A.admittime,
              A.admission_type,
              A.admission_location,

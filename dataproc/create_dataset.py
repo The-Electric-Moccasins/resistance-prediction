@@ -99,7 +99,7 @@ def important_labs():
     df = cursor.execute(statement).as_pandas()
     return df
 
-def static_data(hadm_ids):
+def static_data(hadm_ids: list):
     hadm_ids = ','.join(map(str, hadm_ids))
     statement = """
     SELECT A.subject_id,

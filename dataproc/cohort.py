@@ -94,7 +94,8 @@ WHERE admissions.time_to_rslt <> '<=00h' AND
 
 def query_all_pts(observation_window_hours):
     """
-    Query to select esbl microbiology tests
+    load all patients that are possible for consideration
+    
     and link them to patient's admission time
     """
     query = """
@@ -128,6 +129,42 @@ def query_all_pts(observation_window_hours):
           admissions.death_before_rslt != 1 
     order by random()
     limit 10000
+    
+    """
+    params = {
+        'time_window_hours': str(observation_window_hours)
+    }
+    cursor.execute(query, params)
+    df = as_pandas(cursor)
+
+    return df
+
+
+def query_all_pts_within_observation_window(observation_window_hours):
+    """
+    Query to select esbl microbiology tests
+    and link them to patient's admission time
+    """
+    query = """
+    WITH admits AS (
+    SELECT
+        admits.subject_id,
+        admits.hadm_id,
+        admits.admittime + interval %(time_window_hours)s hour index_date,
+        CASE WHEN admits.deathtime <= (admits.admittime + interval %(time_window_hours)s hour) THEN 1 ELSE 0 END AS death_during_obs_win,
+        CASE WHEN admits.dischtime <= (admits.admittime + interval %(time_window_hours)s hour) THEN 1 ELSE 0 END AS disch_during_obs_win
+    FROM mimiciii.admissions admits
+    )
+    SELECT         
+        admits.subject_id,
+        admits.hadm_id,
+        admits.index_date
+    FROM admits
+    WHERE 
+          admits.death_during_obs_win != 1 
+          and admits.disch_during_obs_win != 1
+    order by random()
+    --limit 1000
     
     """
     params = {

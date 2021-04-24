@@ -16,7 +16,7 @@ params = HyperParams()
 from embeddings.dataloader import TheDataSet
 from embeddings.autoencoder import Autoencoder # so we can load this model
 
-USE_AUTOENCODER = False
+USE_AUTOENCODER = True
 
 
 def get_autoencoder():
@@ -116,7 +116,7 @@ def train_xgboost():
     import xgboost as xgb
 
     param_dist = dict(objective='binary:logistic',
-                      n_estimators=170,
+                      n_estimators=100, # 170,
                       eval_metric='rmsle', # 'logloss',
                       max_depth=4,
                       eta=0.3,
@@ -125,16 +125,6 @@ def train_xgboost():
                       # subsample=0.8,
                       # colsample_bynode=0.5
                     )
-    # param_dist = dict(objective='binary:logistic',
-    #                   n_estimators=10,
-    #                   eval_metric='logloss',
-    #                   max_depth=4,
-    #                   eta=1,
-    #                   # booster='gbtree',
-    #                   n_jobs=4,
-    #                   # subsample=0.8,
-    #                   # colsample_bynode=0.5
-    #                 )
 
     xgboost_cls = xgb.XGBClassifier(**param_dist)
     xgboost_cls.fit(X_train, y_train)

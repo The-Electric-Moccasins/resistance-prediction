@@ -22,14 +22,13 @@ cursor = connect(s3_staging_dir='s3://'+athena_query_results_bucket+'/athena/tem
 
 # The above code comes directly from aline-awsathena.ipynb in the MIMIC-III starter code
 
-def loinc_values(loinc_codes) -> pd.DataFrame:
+def loinc_values(lab_item_ids) -> pd.DataFrame:
     statement = """
-    SELECT A.value,
-             B.loinc_code
-    FROM mimiciii.labevents A
-    JOIN mimiciii.d_labitems B
-        ON A.itemid=B.itemid
-    WHERE B.loinc_code IN ({});
-    """.format(str(loinc_codes)[1:-1])
+    SELECT 
+        lab_events.itemid lab_item_id, 
+        lab_events.value
+    FROM mimiciii.labevents lab_events
+    WHERE B.itemid IN ({});
+    """.format(str(lab_item_ids)[1:-1])
     df = cursor.execute(statement).as_pandas()
     return df

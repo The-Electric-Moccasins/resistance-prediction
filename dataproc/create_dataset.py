@@ -99,9 +99,9 @@ def important_labs():
     df = cursor.execute(statement).as_pandas()
     return df
 
-def static_data(hadm_ids: list):
-    hadm_ids = ','.join(map(str, hadm_ids))
-    statement = """
+def static_data(hadm_ids_table: str):
+    #hadm_ids = ','.join(map(str, hadm_ids))
+    statement = f"""
     SELECT A.subject_id,
              A.hadm_id,
              A.admittime,
@@ -115,10 +115,10 @@ def static_data(hadm_ids: list):
              P.gender,
              date_diff('year', P.dob, A.admittime) age
     FROM mimiciii.admissions A
+    JOIN {hadm_ids_table} addmissions_list on addmissions_list.hadm_id = A.hadm_id
     LEFT JOIN mimiciii.patients P
         ON A.subject_id=P.subject_id
-    WHERE A.hadm_id IN ({});
-    """.format(hadm_ids)
+    """
     df = cursor.execute(statement).as_pandas()
     return df
 

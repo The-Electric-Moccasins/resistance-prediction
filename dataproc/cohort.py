@@ -140,12 +140,17 @@ def query_all_pts(observation_window_hours):
     return df
 
 
-def query_all_pts_within_observation_window(observation_window_hours):
+
+def create_all_pts_within_observation_window(observation_window_hours) -> str:
     """
-    Query to select esbl microbiology tests
-    and link them to patient's admission time
+    create a view of all patients within observation window
+    return the view name
     """
-    query = """
+    
+    view_name = f"default.all_pts_{observation_window_hours}_hours"
+    
+    query = f"""
+    CREATE OR REPLACE VIEW {view_name} AS
     WITH admits AS (
     SELECT
         admits.subject_id,
@@ -171,9 +176,20 @@ def query_all_pts_within_observation_window(observation_window_hours):
         'time_window_hours': str(observation_window_hours)
     }
     cursor.execute(query, params)
-    df = as_pandas(cursor)
+    return view_name
+ 
 
-    return df
+
+def query_all_pts_within_observation_window(observation_window_hours):
+    """
+    Query to select all patients
+    and link them to patient's admission time
+    """
+    table_name = create_all_pts_within_observation_window(observation_window_hours)
+    query = f"select * from {table_name}"
+    cursor.execute(query)
+    df = as_pandas(cursor)
+    return df, table_name
 
 
 def remove_dups(df):

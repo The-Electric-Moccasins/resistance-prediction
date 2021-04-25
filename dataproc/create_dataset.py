@@ -139,3 +139,106 @@ def dataset_creation(hadm_ids: list, observation_window_hours: float):
     df.columns.name = None
     df = df.merge(static_df,how='left', on=['hadm_id','subject_id'])
     return df
+
+
+def prescriptions(hadm_ids: list, observation_window_hours: float):
+    """
+    Query to select antibiotics prescriptions 
+    records based patients' hadm_id
+    """
+    hadm_ids = ', '.join(map(str, hadm_ids))
+    time_window_hours = str(observation_window_hours)
+    query = f"""
+    WITH antibiotics AS (
+        SELECT *
+        FROM mimiciii.prescriptions
+        WHERE  
+        drug like '%Amikacin%' OR drug like '%Ampicillin%' OR
+        drug like '%Cefazolin%' OR drug like '%Cefepime%' OR
+        drug like '%Cefpodoxime%' OR drug like '%Ceftazidime%' OR
+        drug like '%Ceftriaxone%' OR drug like '%Cefuroxime%' OR
+        drug like '%Chloramphenicol%' OR drug like '%Ciprofloxacin%' OR
+        drug like '%Clindamycin%' OR drug like '%Daptomycin%' OR
+        drug like '%Erythromycin%' OR drug like '%Gentamicin%' OR
+        drug like '%Imipenem%' OR drug like '%Levofloxacin%' OR
+        drug like '%Linezolid%' OR drug like '%Meropenem%' OR
+        drug like '%Nitrofurantoin%' OR drug like '%Oxacillin%' OR
+        drug like '%Penicillin%' OR drug like '%Piperacillin%' OR
+        drug like '%Rifampin%' OR drug like '%Tetracycline%' OR
+        drug like '%Tobramycin%' OR drug like '%Trimethoprim%' OR
+        drug like '%Sulfonamide%' OR drug like '%Vancomycin%' OR
+        drug like '%Tazobactam%'         
+        )
+    SELECT 
+        A.hadm_id,
+        A.startdate,
+        A.enddate,
+        A.drug,
+        admissions.admittime,
+        admissions.admittime + interval '{time_window_hours}' hour as index_date
+        
+    FROM mimiciii.admissions
+    LEFT JOIN antibiotics A
+        ON A.hadm_id = admissions.hadm_id
+    WHERE 
+        A.startdate <= admissions.admittime + interval '{time_window_hours}' hour
+        AND A.hadm_id in ({hadm_ids})
+        
+    """
+    
+    
+    df = cursor.execute(query).as_pandas()
+
+    return df
+
+
+def previous_admissions(hadm_ids):
+    """
+    Query to select previous admissions 
+    records based patients' hadm_id
+    """
+    hadm_ids = ','.join(map(str, hadm_ids)) 
+    query = """
+    SELECT
+        admits.hadm_id,
+        admits.admittime,
+        admits2.hadm_id as prev_hadm_id,
+        admits2.admittime as prev_admittime
+    FROM mimiciii.admissions admits
+    LEFT JOIN mimiciii.admissions admits2
+    ON admits.subject_id = admits2.subject_id
+    WHERE 
+        admits2.admittime < admits.admittime AND
+        admits2.admittime >= admits.admittime - interval '360' day AND
+        admits.hadm_id IN ({})
+        """.format(hadm_ids)
+    df = cursor.execute(query).as_pandas()
+    return df
+
+
+def open_wounds_diags(hadm_ids):
+    """
+    Query to select diagnosis of open wound
+    records based patients' hadm_id
+    """
+    hadm_ids = ','.join(map(str, hadm_ids)) 
+    query = """
+    SELECT 
+        hadm_id,
+        icd9_code
+    FROM mimiciii.diagnoses_icd
+    WHERE 
+       (icd9_code like '870%' OR
+        icd9_code like '871%' OR
+        icd9_code like '872%' OR
+        icd9_code like '873%' OR
+        icd9_code like '874%' OR
+        icd9_code like '875%' OR
+        icd9_code like '876%' OR
+        icd9_code like '877%' OR
+        icd9_code like '878%' OR
+        icd9_code like '879%' ) AND
+        hadm_id IN ({})
+        """.format(hadm_ids)
+    df = cursor.execute(query).as_pandas()
+    return df

@@ -4,6 +4,7 @@ from pyathena.pandas.cursor import PandasCursor
 from pyathena.pandas.util import as_pandas
 import boto3
 from botocore.client import ClientError
+import pandas as pd
 
 s3 = boto3.resource('s3')
 client = boto3.client("sts")
@@ -21,7 +22,7 @@ cursor = connect(s3_staging_dir='s3://'+athena_query_results_bucket+'/athena/tem
 
 # The above code comes directly from aline-awsathena.ipynb in the MIMIC-III starter code
 
-def loinc_values(loinc_codes):
+def loinc_values(loinc_codes) -> pd.DataFrame:
     statement = """
     SELECT A.value,
              B.loinc_code

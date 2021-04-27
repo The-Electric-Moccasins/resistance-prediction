@@ -32,7 +32,7 @@ cursor = connect(s3_staging_dir='s3://' + athena_query_results_bucket + '/athena
 # link them with patients admission date from
 # mimiciii.admissions table:
 
-def query_esbl_pts():
+def query_esbl_pts(observation_window_hours):
     """
     Query to select esbl microbiology tests
     and link them to patient's admission time
@@ -45,18 +45,8 @@ SELECT
     admits.admittime,
     admits.deathtime, 
     microb.charttime,
-    date_diff('hour', admits.admittime, microb.charttime) as diff,
     CASE WHEN admits.deathtime < microb.charttime THEN 1 ELSE 0 END AS death_before_rslt,
-    CASE WHEN date_diff('hour', admits.admittime, microb.charttime) IS NULL THEN '<=00h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 0  THEN '<=00h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 6  THEN '<=06h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 12 THEN '<=12h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 24 THEN '<=24h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 36 THEN '<=36h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 48 THEN '<=48h'
-    ELSE '>48h' END AS time_to_rslt,
-    microb.org_itemid, 
-    microb.org_name,
+    date_diff('hour', admits.admittime, microb.charttime) AS time_to_rslt,
     CASE WHEN microb.interpretation in ('R','I') THEN 1 ELSE 0 END AS RESISTANT_YN,
     CASE WHEN microb.interpretation = 'S' THEN 1 ELSE 0 END SENSITIVE_YN
 FROM mimiciii.admissions admits
@@ -78,16 +68,18 @@ SELECT
     admissions.hadm_id,
     admissions.admittime,
     admissions.charttime,
-    admissions.diff,
     admissions.time_to_rslt,
     RESISTANT_YN,
     SENSITIVE_YN
 FROM admissions
-WHERE admissions.time_to_rslt <> '<=00h' AND 
-      admissions.death_before_rslt != 1 
+WHERE admissions.time_to_rslt is not null
+      and admissions.time_to_rslt > %(time_window_hours)d
 
 """
-    cursor.execute(query)
+    params = {
+        'time_window_hours': observation_window_hours
+    }
+    cursor.execute(query, params)
     df = as_pandas(cursor)
 
     return df

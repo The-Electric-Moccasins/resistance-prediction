@@ -16,7 +16,7 @@ params = HyperParams()
 from embeddings.dataloader import TheDataSet
 from embeddings.autoencoder import Autoencoder # so we can load this model
 
-USE_AUTOENCODER = True
+USE_AUTOENCODER = False
 
 
 def get_autoencoder():
@@ -29,7 +29,7 @@ def get_autoencoder():
 def load_data():
 #     dataset = TheDataSet(datafile='data/fulldata.npy', pad_to_360=False)
     dataset = TheDataSet(datafile='data/labdata.npy', pad_to_360=False)
-    # dataset = TheDataSet(datafile='data/fulldata_initial.npy', pad_to_360=False)
+#     dataset = TheDataSet(datafile='data/fulldata_initial.npy', pad_to_360=False)
     data_loader = torch.utils.data.DataLoader(dataset)
     if USE_AUTOENCODER:
         print("Using AutoEncoder")
@@ -55,6 +55,7 @@ def print_accuracy(cv_scores):
 
 X, y = load_data()
 
+print(y.dtype)
 
 import pandas as pd
 df_X = pd.DataFrame(X)
@@ -131,8 +132,8 @@ def train_xgboost():
     return xgboost_cls
 
 
-# model = train_random_forest()
-model = train_xgboost()
+model = train_random_forest()
+# model = train_xgboost()
 y_validate_hat = model.predict(X_validate)
 print(f"predictions mean: {np.mean(y_validate_hat)}")
 simple_score = model.score(X_validate, y_validate)

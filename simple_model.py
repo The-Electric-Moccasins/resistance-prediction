@@ -27,8 +27,8 @@ def get_autoencoder():
 
 
 def load_data():
-#     dataset = TheDataSet(datafile='data/fulldata.npy', pad_to_360=False)
-    dataset = TheDataSet(datafile='data/labdata.npy', pad_to_360=False)
+    dataset = TheDataSet(datafile='data/fulldata.npy', pad_to_360=False)
+#     dataset = TheDataSet(datafile='data/labdata.npy', pad_to_360=False)
 #     dataset = TheDataSet(datafile='data/fulldata_initial.npy', pad_to_360=False)
     data_loader = torch.utils.data.DataLoader(dataset)
     if USE_AUTOENCODER:
@@ -86,6 +86,7 @@ print(f"Validate shape: {X_validate.shape}")
 
 
 def train_random_forest():
+    print("Training Random Forest")
     if USE_AUTOENCODER:
         rf_params = dict(                          class_weight='balanced_subsample',
                                                    n_estimators=133,
@@ -100,10 +101,10 @@ def train_random_forest():
     else:
         rf_params = dict(n_estimators=100,
                                max_depth=10,
-                               max_leaf_nodes=90,
-                               max_features=20,
+                               #max_leaf_nodes=90,
+                               max_features=0.3,
                                max_samples=0.9,
-                               min_samples_leaf=5,
+                               min_samples_leaf=10,
                                min_samples_split=10,
                                  random_state=7,
                                 n_jobs=2)
@@ -115,6 +116,7 @@ def train_random_forest():
 
 def train_xgboost():
     import xgboost as xgb
+    print("Training XGBoost")
 
     param_dist = dict(objective='binary:logistic',
                       n_estimators=100, # 170,
@@ -132,8 +134,8 @@ def train_xgboost():
     return xgboost_cls
 
 
-model = train_random_forest()
-# model = train_xgboost()
+# model = train_random_forest()
+model = train_xgboost()
 y_validate_hat = model.predict(X_validate)
 print(f"predictions mean: {np.mean(y_validate_hat)}")
 simple_score = model.score(X_validate, y_validate)

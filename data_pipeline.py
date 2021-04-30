@@ -1,289 +1,479 @@
-from dataproc.cohort import query_esbl_pts, remove_dups, observation_window, query_all_pts
-from dataproc.sampling import generate_samples
-from dataproc.create_dataset import dataset_creation
-from hyper_params import HyperParams
-
 import numpy as np
 import pandas as pd
+from dataproc.io import write_dataframe
+from dataproc import cohort
+from dataproc import create_dataset
+from dataproc.proc_utils import drop_sparse_columns, stanardize_numeric_values, replace_missing_val
 
-from sklearn.preprocessing import OneHotEncoder
+from hyper_params import HyperParams
 
-params = HyperParams()
-print(params.__dict__)
-# cohort_query =  lambda: query_esbl_pts()
-cohort_query =  lambda: query_all_pts(params.observation_window_hours)
-RECALC_LOINC_VALS = True
-DATA_DIR = 'data_ae_train'  # 'data'
-data_file_name = f'{DATA_DIR}/fulldata.npy'
-
-
-# Patients cohort:
-
+DATA_DIR = 'data'
 
 
 def main():
-    esbl_admits = cohort_query()
-    print(f"loaded {esbl_admits.shape[0]} patients")
-    # Remove dups
-    esbl_admits = remove_dups(esbl_admits)
-    print("removed dups")
-    print(f"esbl_admits: {esbl_admits.shape}")
-    print(esbl_admits.head())
-    # Create observation window
-    esbl_admits_window = observation_window(esbl_admits, window_size=params.observation_window_hours)
-    print(f"esbl_admits_window: {esbl_admits_window.shape}")
-    # Subset columns
-    pts_labels = esbl_admits_window[['hadm_id', 'index_date','RESISTANT_YN']]
-    pts_labels.to_pickle(f'{DATA_DIR}/patient_labels.pkl')
+    params = HyperParams()
 
-    # Import cohort/labels data from the .pkl file:
+    # create list of patients, max_observation_window
+    df_all_pts_within_observation_window, view_name_all_pts_within_observation_window = \
+        cohort.query_all_pts_within_observation_window(params.observation_window_hours)
+    write_dataframe(df_all_pts_within_observation_window, 'df_all_pts_within_observation_window')
+    # view_name_all_pts_within_observation_window = f'default.all_pts_{params.observation_window_hours}_hours'
+    # df_all_pts_within_observation_window = load_dataframe('df_all_pts_within_observation_window')
 
-    # pts_labels = pd.read_pickle(f'{DATA_DIR}/patient_labels.pkl')
-    print(pts_labels.shape)
+    # generate features for all patients (under observation window)
 
-    # Patient's features data:
+    ## Static features
+    df_static_data = load_static_features(view_name_all_pts_within_observation_window)
 
-    # Loading the features
-    
-    features = dataset_creation(pts_labels['hadm_id'], params.observation_window_hours)
-    features = features.merge(pts_labels[['hadm_id','RESISTANT_YN']], on='hadm_id')
-    features.to_pickle(f'{DATA_DIR}/features.pkl')
-    
-    # Make sure we have the same columns as in the cohort
-    cols = ['hadm_id', 'subject_id', '10378-8', '10535-3', '10839-9', '11555-0', '11556-8', '11557-6', '11558-4', '13362-9', '1644-4', '1742-6', '1751-7', '17849-1', '1798-8', '1863-0', '1920-8', '1959-6', '1963-8', '1968-7', '1971-1', '1975-2', '1988-5', '1994-3', '19991-9', '19994-3', '2000-8', '20077-4', '20112-9', '20564-1', '20569-0', '20570-8', '20578-1', '2069-3', '2075-0', '2078-4', '2085-9', '2090-9', '2093-3', '2143-6', '2157-6', '2160-0', '2161-8', '2170-9', '2276-4', '2284-8', '2339-0', '2345-7', '2498-4', '2500-7', '2532-0', '2601-3', '26498-6', '2692-2', '2695-5', '2777-1', '2823-3', '2828-2', '28541-1', '2947-0', '2951-2', '2955-3', '30089-7', '3016-3', '30226-5', '3040-3', '3094-0', '3095-7', '3151-8', '3173-2', '3255-7', '32693-4', '3297-9', '3349-8', '3376-1', '33762-6', '3377-9', '3390-2', '33914-3', '3397-7', '34728-6', '3773-9', '3879-4', '3967-7', '4023-8', '4073-3', '42662-7', '4542-7', '4544-3', '4548-4', '48065-7', '5642-4', '5767-9', '5769-5', '5770-3', '5778-6', '5787-7', '5792-7', '5793-5', '5794-3', '5796-8', '5797-6', '5799-2', '5802-4', '5803-2', '5804-0', '5808-1', '5811-5', '5818-0', '5821-4', '5822-2', '5895-7', '5902-2', '6298-4', '6598-7', '6768-6', '6773-6', '702-1', '704-7', '711-2', '718-7', '728-6', '731-0', '733-6', '738-5', '741-9', '742-7', '761-7', '763-3', '772-4', '774-0', '777-3', '778-1', '779-9', '7790-9', '7791-7', '785-6', '786-4', '787-2', '788-0', '789-8', '800-3', '804-5', '8246-1', '8247-9', '9322-9', 'admittime', 'admission_type', 'admission_location', 'insurance', 'language', 'religion', 'marital_status', 'ethnicity', 'gender', 'RESISTANT_YN']
-    
-    features = features[cols]
+    # Antibiotics prescriptions:
+    onehotrx_df = load_antibiotics(view_name_all_pts_within_observation_window)
+
+    # Previous admissions:
+    admits_df = load_previous_admissions(view_name_all_pts_within_observation_window)
+
+    # Open Wounds Diagnosis:
+    wounds_df = load_open_wounds(view_name_all_pts_within_observation_window)
+
+    # lab events
+    df_lab_events = load_lab_events(view_name_all_pts_within_observation_window)
+
+    # lab results
+    df_lab_results = get_lab_results(df_lab_events)
+
+    df_lab_flags = get_lab_flags(df_lab_events)
+
+    # join lab results
+    df_lab = df_lab_results.merge(df_lab_flags, how='left', on=['hadm_id'])
+    # sort columns by lab tests names
+    df_lab = df_lab.set_index('hadm_id').reindex(sorted(df_lab.columns), axis=1).drop(columns=['hadm_id']).reset_index()
+
+    df_dataset_unprocessed = join_static_and_lab_data(df_lab, df_static_data)
+
+    # numeric values: clean and standardize
+    df_dataset_unprocessed = clean_and_standardize_numeric_values(df_dataset_unprocessed)
+
+    # categorical values: One Hot Encode
+    df_dataset_processed = on_hot_encode_categorical(df_dataset_unprocessed)
+
+    # join on antibiotics, previous admissions and wound
+    df_dataset_processed = pd.merge(df_dataset_processed, onehotrx_df, on='hadm_id', how='left')
+    df_dataset_processed = pd.merge(df_dataset_processed, admits_df, on='hadm_id', how='left')
+    df_dataset_processed = pd.merge(df_dataset_processed, wounds_df, on='hadm_id', how='left')
+
+    df_final_dataset = df_dataset_processed
+    print(f"df_final_dataset: {df_final_dataset.shape}")
+    write_dataframe(df_final_dataset, 'df_final_dataset')
+    # df_dataset_processed = load_dataframe('df_final_dataset')
+
+    return df_final_dataset
 
 
-    # features = pd.read_pickle(f'{DATA_DIR}/features.pkl')
+def load_static_features(view_name_all_pts_within_observation_window):
+    df_static_data = create_dataset.static_data(hadm_ids_table=view_name_all_pts_within_observation_window)
+    df_static_data = df_static_data.drop(columns=['admittime'])
+    static_feature_names = df_static_data.columns.tolist()
+    process_static_data(df_static_data)
+    write_dataframe(df_static_data, 'df_static_data')
+    # df_static_data = load_dataframe('df_static_data')
+    # static_feature_names = df_static_data.columns.tolist()
+    return df_static_data
 
 
-#     loinc_codes = list(features.drop(columns=['hadm_id', 'subject_id', 'admittime','admission_type']).columns)[:-8]
+def on_hot_encode_categorical(df_dataset_unprocessed):
+    categorical_cols = df_dataset_unprocessed.select_dtypes('object').columns.tolist()
+    df_dataset_processed = pd.get_dummies(df_dataset_unprocessed,
+                                          columns=categorical_cols,
+                                          dummy_na=True,
+                                          drop_first=True)
+    df_dataset_processed.fillna(0)
+    print(f"df_dataset_processed: {df_dataset_processed.shape}")
+    write_dataframe(df_dataset_processed, 'df_dataset_processed')
+    # df_dataset_processed = load_dataframe('df_dataset_processed')
+    return df_dataset_processed
 
-    # make sure we have the same loinc codes as in the cohort
-    loinc_codes = ['10378-8', '10535-3', '10839-9', '11555-0', '11556-8', '11557-6', '11558-4', '13362-9', '1644-4', '1742-6', '1751-7', '17849-1', '1798-8', '1863-0', '1920-8', '1959-6', '1963-8', '1968-7', '1971-1', '1975-2', '1988-5', '1994-3', '19991-9', '19994-3', '2000-8', '20077-4', '20112-9', '20564-1', '20569-0', '20570-8', '20578-1', '2069-3', '2075-0', '2078-4', '2085-9', '2090-9', '2093-3', '2143-6', '2157-6', '2160-0', '2161-8', '2170-9', '2276-4', '2284-8', '2339-0', '2345-7', '2498-4', '2500-7', '2532-0', '2601-3', '26498-6', '2692-2', '2695-5', '2777-1', '2823-3', '2828-2', '28541-1', '2947-0', '2951-2', '2955-3', '30089-7', '3016-3', '30226-5', '3040-3', '3094-0', '3095-7', '3151-8', '3173-2', '3255-7', '32693-4', '3297-9', '3349-8', '3376-1', '33762-6', '3377-9', '3390-2', '33914-3', '3397-7', '34728-6', '3773-9', '3879-4', '3967-7', '4023-8', '4073-3', '42662-7', '4542-7', '4544-3', '4548-4', '48065-7', '5642-4', '5767-9', '5769-5', '5770-3', '5778-6', '5787-7', '5792-7', '5793-5', '5794-3', '5796-8', '5797-6', '5799-2', '5802-4', '5803-2', '5804-0', '5808-1', '5811-5', '5818-0', '5821-4', '5822-2', '5895-7', '5902-2', '6298-4', '6598-7', '6768-6', '6773-6', '702-1', '704-7', '711-2', '718-7', '728-6', '731-0', '733-6', '738-5', '741-9', '742-7', '761-7', '763-3', '772-4', '774-0', '777-3', '778-1', '779-9', '7790-9', '7791-7', '785-6', '786-4', '787-2', '788-0', '789-8', '800-3', '804-5', '8246-1', '8247-9', '9322-9']
-    # print(list(loinc_codes))
 
-    features_summary = features[loinc_codes].describe()
+def clean_and_standardize_numeric_values(df_dataset_unprocessed):
+    columns_to_standardize = [col for col in df_dataset_unprocessed.columns.tolist() if not col.endswith('_flag')]
+    df_dataset_unprocessed = stanardize_numeric_values(df_dataset_unprocessed, columns_to_standardize)
+    numeric_cols = df_dataset_unprocessed.select_dtypes('number')
+    numeric_cols = [col for col in numeric_cols if not col.endswith('_flag')]
+    df_new_numeric = replace_missing_val(df_dataset_unprocessed, numeric_cols)
+    df_dataset_unprocessed = df_dataset_unprocessed.drop(columns=numeric_cols).join(df_new_numeric)
+    return df_dataset_unprocessed
 
-    if RECALC_LOINC_VALS:
-        from dataproc.embeddings import loinc_values
 
-        loinc_vals = loinc_values(loinc_codes)
-        loinc_vals.to_pickle(f'{DATA_DIR}/loinc_vals_raw.pic')
-        loinc_vals.dropna(subset=['value'], inplace=True)
-        loinc_vals = loinc_vals.astype({'value': 'string', 'loinc_code': 'category'})
-        loinc_vals['value'] = loinc_vals['value'].map(lambda x: x.lstrip('LESS THAN '))
-        loinc_vals['value'] = loinc_vals['value'].map(lambda x: x.lstrip('GREATER THAN '))
-        loinc_vals['value'] = loinc_vals['value'].map(lambda x: x.lstrip('>GREATER THAN '))
-        loinc_vals['value'] = loinc_vals['value'].map(lambda x: x.lstrip('<LESS THAN '))
-        loinc_vals['value'] = loinc_vals['value'].map(lambda x: x.rstrip(' NG/ML'))
-        loinc_vals['value'] = loinc_vals['value'].map(lambda x: x.lstrip('<>'))
-        loinc_vals['value'] = loinc_vals['value'].map(lambda x: x.replace(',', '.'))
-        loinc_vals.to_pickle(f'{DATA_DIR}/loinc_vals_str_clean.pic')
+def join_static_and_lab_data(df_lab, df_static_data):
+    df_lab = df_lab.set_index(['hadm_id'])
+    df_static_data = df_static_data.set_index(['hadm_id'])
+    df_dataset_unprocessed = df_lab.join(df_static_data, how='inner')  # join on index hadm_id
+    print(f"df_dataset_unprocessed: {df_dataset_unprocessed.shape}")
+    write_dataframe(df_dataset_unprocessed, 'df_dataset_unprocessed')
+    # df_dataset_unprocessed = load_dataframe('df_dataset_unprocessed')
+    return df_dataset_unprocessed
 
-        loinc_vals.drop(list(loinc_vals.loc[loinc_vals['value'] == 'UNABLE TO ANALYZE'].index),  inplace=True)
-        loinc_vals.drop(list(loinc_vals.loc[loinc_vals['value'] == 'MOLYSIS FALSELY DECREASES THIS RESULT'].index),  inplace=True)
-        loinc_vals.drop(list(loinc_vals.loc[loinc_vals['value'] == 'COMPUTER NETWORK FAILURE. TEST NOT RESULTED.'].index),  inplace=True)
-        loinc_vals.drop(list(loinc_vals.loc[loinc_vals['value'] == 'UNABLE TO DETERMINE'].index),  inplace=True)
-        loinc_vals.drop(list(loinc_vals.loc[loinc_vals['value'] == ':UNABLE TO DETERMINE'].index),  inplace=True)
-        loinc_vals.drop(list(loinc_vals.loc[loinc_vals['value'] == 'UNABLE TO QUANTITATE'].index),  inplace=True)
-        loinc_vals.drop(list(loinc_vals.loc[loinc_vals['value'] == 'UNABLE TO REPORT'].index),  inplace=True)
-        loinc_vals.to_pickle(f'{DATA_DIR}/loinc_vals.pic')
-    else:
-        loinc_vals = pd.read_pickle(f'{DATA_DIR}/loinc_vals.pic')
 
+def get_lab_flags(df_lab_events):
+    df_lab_flags = pivot_flags_to_columns(df_lab_events)
+    print(f"df_lab_flags: {df_lab_flags.shape}")
+    write_dataframe(df_lab_flags, 'df_lab_flags')
+    # df_lab_flags = load_dataframe('df_lab_flags')
+    # lab_flags_feature_names = df_lab_flags.columns.tolist()
+    return df_lab_flags
+
+
+def get_lab_results(df_lab_events):
+    df_lab_results = pivot_labtests_to_columns(df_lab_events)
+    df_lab_results.shape
+    fix_lab_results_categories(df_lab_results)
+    df_lab_results = df_lab_results.drop(columns=['50827', '50856', '51100', '51482', '50981'])
+    print(f"shape before dropping sparses {df_lab_results.shape}")
+    df_lab_results = drop_sparse_columns(
+        df_lab_results,
+        columns=df_lab_results.drop(columns=['hadm_id']).columns.tolist(),
+        max_sparsity_to_keep=0.95
+    )
+    print(f"shape after dropping sparses {df_lab_results.shape}")
+    numeric, categorical, weird = detect_data_types(df_lab_results.drop(columns=['hadm_id']))
+    set_numeric_columns(df_lab_results, numeric)
+    print(f"df_lab_results: {df_lab_results.shape}")
+    write_dataframe(df_lab_results, 'df_lab_results')
+    # df_lab_results = load_dataframe('df_lab_results')
+    # lab_results_feature_names = df_lab_results.columns.tolist()
+    return df_lab_results
+
+
+def detect_data_types(df, columns=None):
+    if columns is None:
+        columns = df.columns.tolist()
     numeric = []
     categorical = []
     weird = []
-    for code in loinc_codes:
-        size = len(loinc_vals.loc[loinc_vals['loinc_code'] == str(code), 'value'])
-        size_unique = len(loinc_vals.loc[loinc_vals['loinc_code'] == str(code), 'value'].unique())
-        sum_na = pd.to_numeric(loinc_vals.loc[loinc_vals['loinc_code'] == str(code), 'value'], errors='coerce').isna().sum()
+    N = df.shape[0]
+    for code in columns:
+        n_missing = df[code].isna().sum()
+        size = N - n_missing
+        size_unique = df[code].nunique()
+        sum_na = pd.to_numeric(df[code][df[code].notna()], errors='coerce').isna().sum()
         if sum_na / size < 0.05:
             numeric.append(code)
         elif sum_na / size > 0.05 and size_unique < 100:
             categorical.append(code)
         else:
             weird.append(code)
+    return numeric, categorical, weird
 
 
-    # remove lab column that contains only 'inf' and 'Nan'
-    numeric.remove('26498-6')
-    # remove lab column that contains phrase 'See comments'
-    categorical.remove('33914-3')
-    # remove lab column that contains phrase 'Random'
-    categorical.remove('13362-9')
+def set_numeric_columns(df, numeric_columns: list):
+    df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce', axis=1)
+    return df
 
 
-    print('All:', len(loinc_codes))
-    print('Numeric: ', len(numeric))
-    print('Categorical: ', len(categorical))
-    print('Weird:', len(weird))
+def fix_lab_results_categories(df_lab_results):
+    df_lab_results['51501'] = np.where(df_lab_results['51501'].isin(['<1', '1', '2']), '0-2',
+                                       np.where(df_lab_results['51501'].isin(['3', '4']), '3-5',
+                                                df_lab_results['51501']))
+    df_lab_results['51506'] = np.where(df_lab_results['51506'].isin(['CLEAR']), 'Clear',
+                                       np.where(df_lab_results['51506'].isin(['SLHAZY']), 'SlHazy',
+                                                np.where(df_lab_results['51506'].isin(['HAZY']), 'Hazy',
+                                                         np.where(df_lab_results['51506'].isin(['SlCloudy']), 'SlCldy',
+                                                                  np.where(df_lab_results['51506'].isin(['CLOUDY']),
+                                                                           'Cloudy', df_lab_results['51506'])))))
+    df_lab_results['51463'] = np.where(df_lab_results['51463'].isin(['0']), 'NEG',
+                                       np.where(df_lab_results['51463'].isin(['NOTDONE']), 'NONE',
+                                                np.where(df_lab_results['51463'].isin(['LRG']), 'MANY',
+                                                         df_lab_results['51463'])))
+    df_lab_results['51508'] = np.where(df_lab_results['51508'].isin(['YELLOW', 'YEL']), 'Yellow',
+                                       np.where(df_lab_results['51508'].isin(['STRAW']), 'Straw',
+                                                np.where(df_lab_results['51508'].isin(['AMBER', 'AMB']), 'Amber',
+                                                         np.where(df_lab_results['51508'].isin(['RED', 'R']), 'Red',
+                                                                  np.where(
+                                                                      df_lab_results['51508'].isin(['ORANGE', 'O']),
+                                                                      'Orange',
+                                                                      np.where(df_lab_results['51508'].isin(
+                                                                          ['DKAMB', 'DKAMBER', 'DKAMBE', 'DRKAMBER']),
+                                                                          'DkAmb',
+                                                                          np.where(
+                                                                              df_lab_results['51508'].isin([' ']),
+                                                                              np.nan,
+                                                                              np.where(
+                                                                                  df_lab_results['51508'].isin(
+                                                                                      ['GREEN', 'Lt', 'NONE',
+                                                                                       'DKBROWN', 'Black', 'HAZY',
+                                                                                       'LTBROWN', 'BLUE']),
+                                                                                  'Other',
+                                                                                  df_lab_results['51508']))))))))
+    df_lab_results['51508'] = df_lab_results['51508'].map(
+        {
+            'PINK': 'Pink',
+            'None': 'NONE'
+        }
+    )
+    # >80 is a category by iteslef, so keeping it.
+    # df_lab_results['51484'] = np.where(df_lab_results['51484'].isin(['>80']), '80',df_lab_results['51484'])
+    # >300 is a category by itself, so keeping it
+    # df_lab_results['51492'] = np.where(df_lab_results['51492'].isin(['>300']), '300',
+    #                     np.where(df_lab_results['51492'].isin([' ']), np.nan, df_lab_results['51492']))
+    df_lab_results['51492'] = np.where(df_lab_results['51492'].isin([' ']), np.nan, df_lab_results['51492'])
+    df_lab_results['51514'] = np.where(df_lab_results['51514'].isin(['.2']), '0.2',
+                                       np.where(df_lab_results['51514'].isin(['>8']), '>8.0',
+                                                np.where(df_lab_results['51514'].isin(['>12']), '>12.0',
+                                                         np.where(df_lab_results['51514'].isin(['NotDone', ' ']),
+                                                                  np.nan, df_lab_results['51514']))))
+    df_lab_results['51003'] = np.where(df_lab_results['51003'].isin(
+        {'<0.01', 'LESS THAN 0.01', '<0.010', 'LESS THAN 0.010', '<0.10', '<0.02', 'LESS THAN 0.1'}), '0.001',
+        np.where(df_lab_results['51003'].isin(
+            {'GREATER THAN 25.0', '>25.0', '>25', 'GREATER THAN 25', '>25.00'}), '30.0',
+            df_lab_results['51003']))
+    df_lab_results['51519'] = np.where(df_lab_results['51519'].isin(['0', 'N']), 'NONE',
+                                       np.where(df_lab_results['51519'].isin(['NOTDONE']), np.nan,
+                                                df_lab_results['51519']))
+    df_lab_results['51266'] = np.where(df_lab_results['51266'].isin(['UNABLE TO ESTIMATE DUE TO PLATELET CLUMPS']),
+                                       'NOTDETECTED', df_lab_results['51266'])
+    df_lab_results['51478'] = df_lab_results['51478'].map(
+        {
+            'Neg': 'NEG',
+            'N': 'NEG',
+        }
+    )
+    df_lab_results['51484'] = df_lab_results['51484'].map(
+        {
+            'T': 'TR',
+            'Tr': 'TR',
+            'Neg': 'NEG',
+            '>80': '150.0'
+        }
+    )
+    df_lab_results['51492'] = df_lab_results['51492'].map(
+        {
+            'Neg': 'NEG',
+            '>600': '600.0',
+            '>300': '500.0',
+        }
+    )
+    df_lab_results['51463'] = df_lab_results['51463'].map(
+        {
+            ' ': 'NONE',
+            'F': 'FEW',
+            'MOD-': 'MOD',
+            '1.0': 'RARE',
+            '7I': 'NONE',
+            '2.0': 'FEW'
+        }
+    )
+    df_lab_results['51003'] = np.where(
+        df_lab_results['51003'].isin({'NotDone', 'NOT DONE', 'ERROR', 'NOT DONE , TOTAL CK LESS THAN 100'}), np.nan,
+        np.where(df_lab_results['51003'].isin({'>500', 'GREATER THAN 500'}), '600.0',
+                 np.where(df_lab_results['51003'].isin({'<1'}), '0.0', df_lab_results['51003'])))
+    df_lab_results['50922'] = np.where(df_lab_results['50922'].isin({'NEG', 'NEGATIVE', 'ERROR'}), -1.0,
+                                       df_lab_results['50922'])
+    df_lab_results['51493'] = df_lab_results['51493'].map(
+        {'0-2': '1.0',
+         '3-5': '4.0',
+         '11-20': '15.0',
+         '>50': '80.0',
+         '6-10': '8.0',
+         '21-50': '35.0',
+         '<1': '0.01',
+         '>1000': '1100.0',
+         'O-2': '1.0',
+         ' 3-5': '4.0',
+         ' ': np.nan,
+         'LOADED': np.nan,
+         ' 0-2': '1.0',
+         'NOTDONE': np.nan,
+         '0-20-2': np.nan,
+         '0-2+': np.nan,
+         'TNTC': np.nan,
+         '3/5': np.nan,
+         '21-200-2': np.nan})
+    df_lab_results['51516'] = df_lab_results['51516'].map(
+        {'0-2': '1.0',
+         '3-5': '4.0',
+         '11-20': '15.0',
+         '>50': '80.0',
+         '6-10': '8.0',
+         '21-50': '35.0',
+         '<1': '0.01',
+         '>1000': '1100.0',
+         'O-2': '1.0',
+         ' 3-5': '4.0',
+         ' ': np.nan,
+         'LOADED': np.nan,
+         ' 0-2': '1.0',
+         'NOTDONE': np.nan,
+         '0-20-2': np.nan,
+         '0-2+': np.nan,
+         'TNTC': np.nan,
+         '3/5': np.nan,
+         '21-200-2': np.nan})
+    df_lab_results['51476'] = df_lab_results['51476'].map(
+        {'0-2': '1.0',
+         '3-5': '4.0',
+         '11-20': '15.0',
+         '>50': '80.0',
+         '6-10': '8.0',
+         '21-50': '35.0',
+         '<1': '0.01',
+         '>1000': '1100.0',
+         'O-2': '1.0',
+         ' 3-5': '4.0',
+         ' ': np.nan,
+         'LOADED': np.nan,
+         ' 0-2': '1.0',
+         'NOTDONE': np.nan,
+         '0-20-2': np.nan,
+         '0-2+': np.nan,
+         'TNTC': np.nan,
+         '3/5': np.nan,
+         '21-200-2': np.nan,
+         '0-2,TRANS': '1.0',
+         '<1 /HPF': '0.5',
+         '11-20-': '15.0',
+         '0.-2': '1.0',
+         ' 0-2': '1.0',
+         })
+    df_lab_results['50911'] = df_lab_results['50911'].map(
+        {
+            'NotDone': np.nan,
+            '>500': '600.0',
+            'GREATER THAN 500': '550.0',
+            'NOT DONE': np.nan,
+            '<1': '0.0',
+            'ERROR': np.nan,
+            'NOT DONE , TOTAL CK LESS THAN 100': np.nan}
+    )
+    df_lab_results['50924'] = df_lab_results['50924'].map(
+        {
+            'GREATER THAN 2000': '5900.0',  # median of > 2000
+            'GREATER THAN 1000': '1500.0',  # median of > 1000
+            '>2000': '5900.0',
+            'GREATER THEN 2000': '5900.0',
+            '> 2000': '5900.0',
+        }
+    )
 
 
-    numeric_stats = []
-    for code in numeric:
-        a = pd.to_numeric(loinc_vals.loc[loinc_vals['loinc_code'] == str(code), 'value'], errors='coerce').describe()
-        numeric_stats.append(a)
-    numeric_stats_df = pd.concat(numeric_stats, axis=1, keys=numeric)
+def pivot_labtests_to_columns(df):
+    df = df.reset_index(drop=True)
+    df = df.pivot(index=['hadm_id'], columns=['itemid'], values=['value'])
+    df.columns = df.columns.to_flat_index()
+    df.columns = [str(colname[1]) for colname in df.columns]
+    df = df.reset_index(['hadm_id'])
+
+    return df
 
 
-    dataset = features.drop(columns=weird, errors='ignore')
+def pivot_flags_to_columns(df):
+    df = df.copy()
+    df['flag'] = df['flag'].fillna('False').map({'abnormal': 1, 'delta': 1, 'False': -1})
+    df['flag_name'] = df['itemid'].astype(str) + pd.Series(["_flag"] * df.shape[0]).astype(str)
+    df = df.pivot(index=['hadm_id'], columns=['flag_name'], values=['flag'])
+    df.columns = df.columns.to_flat_index()
+    df.columns = [str(colname[1]) for colname in df.columns]
+    df = df.fillna(0)
+    df = df.astype('int8')
+    df = df.reset_index(['hadm_id'])
+    return df
 
 
-    # Convert to numeric selected columns
-    dataset[numeric] = dataset[numeric].apply(pd.to_numeric, errors='coerce', axis=1)
-
-    # Since many lab data have outliers the median and interquartile range can be used to standardizing the numeric variables:
-    # - value = (value – median) / (p75 – p25)
-
-    def stanardize_numeric_values(df, list_of_clms, ref_df):
-        """
-        Use the median and interquartile range to
-        standardize the numeric variables
-        value = (value – median) / (p75 – p25)
-        """
-        for code in list_of_clms:
-            median = ref_df[code]['50%']
-            p25 = ref_df[code]['25%']
-            p75 = ref_df[code]['75%']
-            df[code] = (df[code] - median) / (p75 - p25)
-        return df
-    print("stanardize_numeric_values")
-    dataset = stanardize_numeric_values(dataset, numeric, numeric_stats_df)
+def load_lab_events(view_name_hadm_ids):
+    df_lab_events = create_dataset.lab_events(view_name_hadm_ids)
+    df_lab_events = df_lab_events.dropna(subset=['value'])
+    df_lab_events['flag'].fillna('False').map({'abnormal': True, 'delta': True, 'False': False}).value_counts()
+    print('lab events before selection: ', df_lab_events.shape)
+    df_lab_events = keep_last_labtest_instance(df_lab_events)
+    print('lab events after selection: ', df_lab_events.shape)
+    write_dataframe(df_lab_events, 'df_lab_events')
+    # df_lab_events = load_dataframe('df_lab_events')
+    return df_lab_events
 
 
-    # Imputation of missing values using scikit-learn https://scikit-learn.org/stable/modules/impute.html#impute
-
-    from sklearn.impute import SimpleImputer
-
-    def replace_missing_val(df, list_of_clms, how='median'):
-        """
-        Imputation of missing values using median
-        """
-        imp = SimpleImputer(strategy=how)
-        df_prc = imp.fit_transform(df[list_of_clms])
-        #df[list_of_clms] = pd.DataFrame(df_prc, columns=list_of_clms)
-        return df_prc
+def keep_last_labtest_instance(df):
+    """
+    select last instance of every type of test for a patient
+    """
+    df = df.sort_values('charttime', axis=0)
+    df = df.drop_duplicates(subset=['hadm_id', 'itemid'], keep='last', ignore_index=True)
+    return df
 
 
-    numlabvars = replace_missing_val(dataset, numeric, how='median')
-
-    # Clean lab categorical variables:
-
-    dataset['30089-7'] = np.where(dataset['30089-7'].isin(['<1','1','2']), '0-2',
-                         np.where(dataset['30089-7'].isin(['3','4']),'3-5', dataset['30089-7']))
-
-    dataset['5767-9'] = np.where(dataset['5767-9'].isin(['CLEAR']), 'Clear',
-                        np.where(dataset['5767-9'].isin(['SLHAZY']), 'SlHazy',
-                        np.where(dataset['5767-9'].isin(['HAZY']), 'Hazy',
-                        np.where(dataset['5767-9'].isin(['SlCloudy']),'SlCldy',
-                        np.where(dataset['5767-9'].isin(['CLOUDY']),'Cloudy',dataset['5767-9'])))))
-
-    dataset['5769-5'] = np.where(dataset['5769-5'].isin(['0']), 'NEG',
-                        np.where(dataset['5769-5'].isin(['NOTDONE']), 'NONE',
-                        np.where(dataset['5769-5'].isin(['LRG']), 'MANY', dataset['5769-5'])))
-
-    dataset['5778-6'] = np.where(dataset['5778-6'].isin(['YELLOW','YEL']), 'Yellow',
-                        np.where(dataset['5778-6'].isin(['STRAW']), 'Straw',
-                        np.where(dataset['5778-6'].isin(['AMBER','AMB']), 'Amber',
-                        np.where(dataset['5778-6'].isin(['RED']), 'Red',
-                        np.where(dataset['5778-6'].isin(['ORANGE']), 'Orange',
-                        np.where(dataset['5778-6'].isin(['DKAMB','DKAMBER']), 'DkAmb',
-                        np.where(dataset['5778-6'].isin([' ']), np.nan, dataset['5778-6'])))))))
-
-    dataset['5797-6'] = np.where(dataset['5797-6'].isin(['>80']), '80',dataset['5797-6'])
-
-    dataset['5804-0'] = np.where(dataset['5804-0'].isin(['>300']), '300',
-                        np.where(dataset['5804-0'].isin([' ']), np.nan, dataset['5804-0']))
-
-    dataset['5818-0'] = np.where(dataset['5818-0'].isin(['.2']), '0.2',
-                        np.where(dataset['5818-0'].isin(['>8','>8.0']), '8',
-                        np.where(dataset['5818-0'].isin(['>12']), '12',
-                        np.where(dataset['5818-0'].isin(['NotDone']), np.nan, dataset['5818-0']))))
-
-    dataset['5822-2'] = np.where(dataset['5822-2'].isin(['0', 'N']), 'NONE',
-                        np.where(dataset['5822-2'].isin(['NOTDONE']), np.nan, dataset['5822-2']))
-
-    dataset['778-1'] = np.where(dataset['778-1'].isin(['UNABLE TO ESTIMATE DUE TO PLATELET CLUMPS']), 'NOTDETECTED', dataset['778-1'])
-
-
-    dataset.update(dataset[categorical].fillna('UNKNOWN'))
-
-    # Use one hot encoder for categoric lab features:
-    print("One Hot Encoding")
-
-    enc = OneHotEncoder()
-    enc.fit(dataset[categorical])
-    enc.categories_[0:4]
-
-    onehotlabvars = enc.transform(dataset[categorical]).toarray()
-
-    # Clean demographic static variables:
-
-    staticvars = ['admission_type', 'admission_location', 'insurance', 'language',
-                   'religion', 'marital_status', 'ethnicity', 'gender']
-
+def process_static_data(dataset):
     dataset['admission_location'] = \
-    np.where(dataset['admission_location'].isin(['** INFO NOT AVAILABLE **']), 'EMERGENCY ROOM ADMIT',
-    np.where(dataset['admission_location'].isin(['TRANSFER FROM SKILLED NUR','TRANSFER FROM OTHER HEALT',
-                            'TRANSFER FROM HOSP/EXTRAM']), 'TRANSFER FROM MED FACILITY',dataset['admission_location']))
+        np.where(dataset['admission_location'].isin(['** INFO NOT AVAILABLE **']), 'EMERGENCY ROOM ADMIT',
+                 np.where(dataset['admission_location'].isin(['TRANSFER FROM SKILLED NUR', 'TRANSFER FROM OTHER HEALT',
+                                                              'TRANSFER FROM HOSP/EXTRAM']),
+                          'TRANSFER FROM MED FACILITY', dataset['admission_location']))
     dataset['language'] = \
-    np.where(~dataset['language'].isin(['ENGL','SPAN']),'OTHER',dataset['language'])
+        np.where(~dataset['language'].isin(['ENGL', 'SPAN']), 'OTHER', dataset['language'])
 
     dataset['religion'] = \
-    np.where(~dataset['religion'].isin(['CATHOLIC','NOT SPECIFIED','UNOBTAINABLE','PROTESTANT QUAKER','JEWISH']),'OTHER',
-    np.where(dataset['religion'].isin(['UNOBTAINABLE']),'NOT SPECIFIED', dataset['religion'] ))
+        np.where(
+            ~dataset['religion'].isin(['CATHOLIC', 'NOT SPECIFIED', 'UNOBTAINABLE', 'PROTESTANT QUAKER', 'JEWISH']),
+            'OTHER',
+            np.where(dataset['religion'].isin(['UNOBTAINABLE']), 'NOT SPECIFIED', dataset['religion']))
 
     dataset['ethnicity'] = \
-    np.where(dataset['ethnicity'].isin(['ASIAN - CHINESE',
-                                        'ASIAN - ASIAN INDIAN',
-                                        'ASIAN - VIETNAMESE',
-                                        'ASIAN - OTHER',
-                                        'ASIAN - FILIPINO',
-                                        'ASIAN - CAMBODIAN']), 'ASIAN',
-    np.where(dataset['ethnicity'].isin(['WHITE - RUSSIAN',
-                                        'WHITE - BRAZILIAN',
-                                        'WHITE - OTHER EUROPEAN']),'WHITE',
-    np.where(dataset['ethnicity'].isin(['BLACK/CAPE VERDEAN',
-                                        'BLACK/HAITIAN',
-                                        'BLACK/AFRICAN']), 'BLACK/AFRICAN AMERICAN',
-    np.where(dataset['ethnicity'].isin(['HISPANIC/LATINO - PUERTO RICAN',
-                                       'HISPANIC/LATINO - DOMINICAN',
-                                       'HISPANIC/LATINO - SALVADORAN',
-                                       'HISPANIC/LATINO - CUBAN',
-                                       'HISPANIC/LATINO - MEXICAN']), 'HISPANIC OR LATINO',
-    np.where(dataset['ethnicity'].isin(['MULTI RACE ETHNICITY',
-                                        'MIDDLE EASTERN',
-                                        'PORTUGUESE',
-                                        'AMERICAN INDIAN/ALASKA NATIVE',
-                                        'NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER',
-                                        'AMERICAN INDIAN/ALASKA NATIVE FEDERALLY RECOGNIZED TRIBE']), 'OTHER',
-    np.where(dataset['ethnicity'].isin(['UNABLE TO OBTAIN',
-                                        'PATIENT DECLINED TO ANSWER']), 'UNKNOWN/NOT SPECIFIED',
-    dataset['ethnicity']))))))
-
+        np.where(dataset['ethnicity'].isin(['ASIAN - CHINESE',
+                                            'ASIAN - ASIAN INDIAN',
+                                            'ASIAN - VIETNAMESE',
+                                            'ASIAN - OTHER',
+                                            'ASIAN - FILIPINO',
+                                            'ASIAN - CAMBODIAN']), 'ASIAN',
+                 np.where(dataset['ethnicity'].isin(['WHITE - RUSSIAN',
+                                                     'WHITE - BRAZILIAN',
+                                                     'WHITE - OTHER EUROPEAN']), 'WHITE',
+                          np.where(dataset['ethnicity'].isin(['BLACK/CAPE VERDEAN',
+                                                              'BLACK/HAITIAN',
+                                                              'BLACK/AFRICAN']), 'BLACK/AFRICAN AMERICAN',
+                                   np.where(dataset['ethnicity'].isin(['HISPANIC/LATINO - PUERTO RICAN',
+                                                                       'HISPANIC/LATINO - DOMINICAN',
+                                                                       'HISPANIC/LATINO - SALVADORAN',
+                                                                       'HISPANIC/LATINO - CUBAN',
+                                                                       'HISPANIC/LATINO - MEXICAN']),
+                                            'HISPANIC OR LATINO',
+                                            np.where(dataset['ethnicity'].isin(['MULTI RACE ETHNICITY',
+                                                                                'MIDDLE EASTERN',
+                                                                                'PORTUGUESE',
+                                                                                'AMERICAN INDIAN/ALASKA NATIVE',
+                                                                                'NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER',
+                                                                                'AMERICAN INDIAN/ALASKA NATIVE FEDERALLY RECOGNIZED TRIBE']),
+                                                     'OTHER',
+                                                     np.where(dataset['ethnicity'].isin(['UNABLE TO OBTAIN',
+                                                                                         'PATIENT DECLINED TO ANSWER']),
+                                                              'UNKNOWN/NOT SPECIFIED',
+                                                              dataset['ethnicity']))))))
     dataset['marital_status'] = dataset['marital_status'].fillna(value='UNKNOWN')
+    # clean the age column
+    threshold = 105
+    dataset['age'] = dataset['age'].apply(lambda x: x if x < threshold else np.nan)
 
 
-    # Use one hot encoder for demographic features:
-
-    enc = OneHotEncoder(handle_unknown='ignore')
-    enc.fit(dataset[staticvars])
-    enc.categories_
-
-    onehotstaticvars = enc.transform(dataset[staticvars]).toarray()
-
-    # Combine all features and constract full dataset
-
-    response = np.array([dataset['RESISTANT_YN']])
-    response = response.T
-    response.shape
-
-    fulldata = np.concatenate((numlabvars, onehotlabvars, onehotstaticvars, response), axis=1)
-    fulldata.shape
+def load_antibiotics(view_name_hadm_ids):
+    rx = create_dataset.prescriptions(view_name_hadm_ids)
+    rx['value'] = 1
+    rx = rx[['hadm_id', 'drug', 'value']]
+    # Drop duplicated records
+    rx = rx.drop_duplicates(subset=['hadm_id', 'drug'], keep='first')
+    # One-hot encoder for prescriptions
+    onehotrx_df = rx.pivot_table(index='hadm_id', columns='drug', values='value', fill_value=0).reset_index()
+    return onehotrx_df
 
 
-    np.save(data_file_name, fulldata)
-    print(f"done, saved to {data_file_name}")
+def load_previous_admissions(view_name_hadm_ids):
+    admits = create_dataset.previous_admissions(view_name_hadm_ids)
+    admits_df = admits.groupby('hadm_id').agg({'prev_hadm_id': 'nunique'}).reset_index()
+    admits_df = admits_df.rename(columns={'prev_hadm_id': 'n_admits'})
+    print('Previous admits: ', admits_df.shape)
+    print('--------------------------------------------------------------')
+    return admits_df
+
+
+def load_open_wounds(view_name_hadm_ids):
+    wounds = create_dataset.open_wounds_diags(view_name_hadm_ids)
+    wounds['wounds'] = 1  # wounds indicator column
+    # Group on hand_id & drop icd9 code column
+    wounds_df = wounds.drop_duplicates(subset=['hadm_id'], keep='first')
+    wounds_df = wounds_df.drop(columns='icd9_code')
+    print('Open wounds: ', wounds_df.shape)
+    print('--------------------------------------------------------------')
+    return wounds_df

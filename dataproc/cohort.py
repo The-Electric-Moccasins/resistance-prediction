@@ -52,7 +52,11 @@ SELECT
 FROM mimiciii.admissions admits
 INNER JOIN mimiciii.microbiologyevents microb
     ON microb.hadm_id = admits.hadm_id 
-WHERE ab_name in ('CEFTAZIDIME') AND
+WHERE ab_name in 
+    -- ('CEFTAZIDIME') 
+    ('CEFAZOLIN', 'CEFEPIME', 'CEFPODOXIME',
+                  'CEFTAZIDIME', 'CEFTRIAXONE', 'CEFUROXIME')
+    AND
       org_itemid in (
                 80004, -- KLEBSIELLA PNEUMONIAE
                 80026, -- PSEUDOMONAS AERUGINOSA

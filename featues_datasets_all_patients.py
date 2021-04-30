@@ -65,6 +65,7 @@ def run(params :HyperParams):
     df_dataset_processed = pd.merge(df_dataset_processed, onehotrx_df, on='hadm_id', how='left')
     df_dataset_processed = pd.merge(df_dataset_processed, admits_df, on='hadm_id', how='left')
     df_dataset_processed = pd.merge(df_dataset_processed, wounds_df, on='hadm_id', how='left')
+    df_dataset_processed.fillna(0, inplace=True)
 
     df_final_dataset = df_dataset_processed
     print(f"df_final_dataset: {df_final_dataset.shape}")

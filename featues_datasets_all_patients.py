@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from pandas import DataFrame
+
 from dataproc.io import write_dataframe
 from dataproc import cohort
 from dataproc import create_dataset
@@ -10,8 +12,12 @@ from hyper_params import HyperParams
 DATA_DIR = 'data'
 
 
-def main():
-    params = HyperParams()
+def run(params :HyperParams):
+    """
+    Build feature datasets for ALL admissions that were still hospitalized
+    by the end of the observation window
+    returns as a data frame, and also persisted as "df_final_dataset"
+    """
 
     # create list of patients, max_observation_window
     df_all_pts_within_observation_window, view_name_all_pts_within_observation_window = \
@@ -65,7 +71,18 @@ def main():
     write_dataframe(df_final_dataset, 'df_final_dataset')
     # df_dataset_processed = load_dataframe('df_final_dataset')
 
+    save_auto_encoder_training_data(df_final_dataset)
+
     return df_final_dataset
+
+
+
+def save_auto_encoder_training_data(df_features: DataFrame):
+    df_features['y'] = np.zeros((df_features.shape[0],))
+    autoencoder_fulldata = df_features.to_numpy()
+    # Save to a file
+    np.save('data/autoencoder_fulldata.npy', autoencoder_fulldata)
+
 
 
 def load_static_features(view_name_all_pts_within_observation_window):

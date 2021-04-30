@@ -16,6 +16,8 @@ def build_cohort(params: HyperParams, df_features: DataFrame):
     df_full_data = df_cohort.set_index(['hadm_id']).join(df_features.reset_index().set_index(['hadm_id']), how='inner')
 
     df_full_data = set_target_feature_name(df_full_data)
+    
+    print(f"cohort dataset: {df_full_data.shape}")
 
     write_dataframe(df_full_data, 'df_full_data')
 
@@ -41,7 +43,7 @@ def load_labels(params):
     df_cohort = cohort.query_esbl_pts(params.observation_window_hours)
     df_cohort = cohort.remove_dups(df_cohort)
     df_cohort = df_cohort[['hadm_id', 'RESISTANT_YN']]
-    print(f"df_cohort: {df_cohort.shape}")
+    print(f"df_labels: {df_cohort.shape}")
     write_dataframe(df_cohort, 'df_cohort')
     return df_cohort
 

@@ -73,7 +73,7 @@ def run(params :HyperParams):
 
     save_auto_encoder_training_data(df_final_dataset)
 
-    return df_final_dataset
+    return df_final_dataset.reset_index()
 
 
 
@@ -81,7 +81,9 @@ def save_auto_encoder_training_data(df_features: DataFrame):
     df_features['y'] = np.zeros((df_features.shape[0],))
     autoencoder_fulldata = df_features.to_numpy()
     # Save to a file
-    np.save('data/autoencoder_fulldata.npy', autoencoder_fulldata)
+    target_datafile = 'data/autoencoder_fulldata.npy'
+    np.save(target_datafile, autoencoder_fulldata)
+    print(f"autoencoder training data saved to {target_datafile}")
 
 
 

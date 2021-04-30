@@ -6,6 +6,7 @@ from dataproc.io import write_dataframe, load_dataframe
 from hyper_params import HyperParams
 
 
+
 def build_cohort(params: HyperParams, df_features: DataFrame):
 
     df_cohort = load_labels(params)
@@ -21,12 +22,16 @@ def build_cohort(params: HyperParams, df_features: DataFrame):
     # df_full_data = load_dataframe('df_full_data')
     np_fulldata = df_full_data.to_numpy()
     # Save to a file
-    np.save('data/fulldata.npy', np_fulldata)
+    datafile = 'data/fulldata.npy'
+    np.save(datafile, np_fulldata)
+    print(f"cohort data saved to {datafile}")
+    
+    return df_full_data
 
 
 def set_target_feature_name(df_full_data):
-    y_col = df_full_data['y']
-    df_full_data = df_full_data.drop(columns=['y'])
+    y_col = df_full_data['RESISTANT_YN']
+    df_full_data = df_full_data.drop(columns=['RESISTANT_YN'])
     df_full_data['y'] = y_col
     df_full_data = df_full_data.reset_index(drop=True)
     return df_full_data

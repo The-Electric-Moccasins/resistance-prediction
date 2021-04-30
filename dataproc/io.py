@@ -1,6 +1,8 @@
 import pandas as pd
 
 
+DATA_DIR='data'
+
 def write_dataframe(df, filename, data_dir = DATA_DIR):
     destination = f"{DATA_DIR}/{filename}.parquet"
     df.to_parquet(destination)

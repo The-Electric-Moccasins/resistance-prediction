@@ -1,6 +1,6 @@
 class HyperParams():
     def __init__(self):
-        self.observation_window_hours = 6
+        self.observation_window_hours = 24
         self.antibiotics_name = ['CEFTAZIDIME']
         self.bacteria_ids = [
             80004,  # KLEBSIELLA PNEUMONIAE

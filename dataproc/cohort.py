@@ -32,7 +32,7 @@ cursor = connect(s3_staging_dir='s3://' + athena_query_results_bucket + '/athena
 # link them with patients admission date from
 # mimiciii.admissions table:
 
-def query_esbl_pts():
+def query_esbl_pts(observation_window_hours):
     """
     Query to select esbl microbiology tests
     and link them to patient's admission time
@@ -45,18 +45,8 @@ SELECT
     admits.admittime,
     admits.deathtime, 
     microb.charttime,
-    date_diff('hour', admits.admittime, microb.charttime) as diff,
     CASE WHEN admits.deathtime < microb.charttime THEN 1 ELSE 0 END AS death_before_rslt,
-    CASE WHEN date_diff('hour', admits.admittime, microb.charttime) IS NULL THEN '<=00h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 0  THEN '<=00h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 6  THEN '<=06h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 12 THEN '<=12h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 24 THEN '<=24h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 36 THEN '<=36h'
-         WHEN date_diff('hour', admits.admittime, microb.charttime) <= 48 THEN '<=48h'
-    ELSE '>48h' END AS time_to_rslt,
-    microb.org_itemid, 
-    microb.org_name,
+    date_diff('hour', admits.admittime, microb.charttime) AS time_to_rslt,
     CASE WHEN microb.interpretation in ('R','I') THEN 1 ELSE 0 END AS RESISTANT_YN,
     CASE WHEN microb.interpretation = 'S' THEN 1 ELSE 0 END SENSITIVE_YN
 FROM mimiciii.admissions admits
@@ -78,23 +68,26 @@ SELECT
     admissions.hadm_id,
     admissions.admittime,
     admissions.charttime,
-    admissions.diff,
     admissions.time_to_rslt,
     RESISTANT_YN,
     SENSITIVE_YN
 FROM admissions
-WHERE admissions.time_to_rslt <> '<=00h' AND 
-      admissions.death_before_rslt != 1 
+WHERE admissions.time_to_rslt is not null
+      and admissions.time_to_rslt > %(time_window_hours)d
 
 """
-    cursor.execute(query)
+    params = {
+        'time_window_hours': observation_window_hours
+    }
+    cursor.execute(query, params)
     df = as_pandas(cursor)
 
     return df
 
 def query_all_pts(observation_window_hours):
     """
-    Query to select esbl microbiology tests
+    load all patients that are possible for consideration
+    
     and link them to patient's admission time
     """
     query = """
@@ -137,6 +130,60 @@ def query_all_pts(observation_window_hours):
     df = as_pandas(cursor)
 
     return df
+
+
+
+def create_all_pts_within_observation_window(observation_window_hours) -> str:
+    """
+    create a view of all patients within observation window
+    return the view name
+    """
+    
+    view_name = f"default.all_pts_{observation_window_hours}_hours"
+    
+    query = f"""
+    CREATE OR REPLACE VIEW {view_name} AS
+    WITH admits AS (
+    SELECT
+        admits.subject_id,
+        admits.hadm_id,
+        admits.admittime,
+        admits.admittime + interval %(time_window_hours)s hour index_date,
+        CASE WHEN admits.deathtime <= (admits.admittime + interval %(time_window_hours)s hour) THEN 1 ELSE 0 END AS death_during_obs_win,
+        CASE WHEN admits.dischtime <= (admits.admittime + interval %(time_window_hours)s hour) THEN 1 ELSE 0 END AS disch_during_obs_win
+    FROM mimiciii.admissions admits
+    )
+    SELECT         
+        admits.subject_id,
+        admits.hadm_id,
+        admits.index_date,
+        admits.admittime
+    FROM admits
+    WHERE 
+          admits.death_during_obs_win != 1 
+          and admits.disch_during_obs_win != 1
+    order by random()
+    --limit 1000
+    
+    """
+    params = {
+        'time_window_hours': str(observation_window_hours)
+    }
+    cursor.execute(query, params)
+    return view_name
+ 
+
+
+def query_all_pts_within_observation_window(observation_window_hours):
+    """
+    Query to select all patients
+    and link them to patient's admission time
+    """
+    table_name = create_all_pts_within_observation_window(observation_window_hours)
+    query = f"select * from {table_name}"
+    cursor.execute(query)
+    df = as_pandas(cursor)
+    return df, table_name
 
 
 def remove_dups(df):

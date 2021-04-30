@@ -21,34 +21,33 @@ cursor = connect(s3_staging_dir='s3://'+athena_query_results_bucket+'/athena/tem
 
 # The above code comes directly from aline-awsathena.ipynb in the MIMIC-III starter code
 
-def lab_events(hadm_ids: list, observation_window_hours: float):
-    hadm_ids = ','.join(map(str, hadm_ids))
+def lab_events(hadm_ids_table: str):
+#     hadm_ids = ','.join(map(str, hadm_ids))
     statement = f"""
-    SELECT E.subject_id,
-             E.hadm_id,
+    SELECT   E.hadm_id,
              E.itemid,
-             E.charttime,
-             E.value,
-             E.valueuom,
+             case 
+                 -- use valuenum if provided, otherwise the textual. See https://mimic.physionet.org/mimictables/labevents/
+                 when E.valuenum is not null then cast(E.valuenum as varchar)
+                 else E.value
+             end value,
              E.flag,
-             I.label,
-             I.fluid,
-             I.category,
-             I.loinc_code
+             E.charttime
+             -- I.label,
+             -- I.fluid,
+             -- I.category,
+             -- I.loinc_code
     FROM mimiciii.labevents E
     LEFT JOIN mimiciii.d_labitems I
         ON E.itemid=I.itemid
-    JOIN mimiciii.admissions
-        ON E.hadm_id=admissions.hadm_id
-    WHERE E.charttime <= admissions.admittime + interval %(time_window_hours)s hour
-            AND (lower(I.fluid) LIKE '%%blood%%'
-            OR lower(I.fluid) LIKE '%%urine%%')
-    AND E.hadm_id in ({hadm_ids})
+    JOIN {hadm_ids_table} admissions_list 
+        on admissions_list.subject_id = E.subject_id
+        AND E.charttime <=  admissions_list.index_date
+        AND date_diff('day',E.charttime , admissions_list.admittime) <= 7
+    WHERE  (lower(I.fluid) LIKE '%blood%'
+            OR lower(I.fluid) LIKE '%urine%')
     """
-    params = {
-        'time_window_hours': str(observation_window_hours)
-    }
-    df = cursor.execute(statement, params ).as_pandas()
+    df = cursor.execute(statement).as_pandas()
     return df
 
 def important_labs():
@@ -99,11 +98,10 @@ def important_labs():
     df = cursor.execute(statement).as_pandas()
     return df
 
-def static_data(hadm_ids):
-    hadm_ids = ','.join(map(str, hadm_ids))
-    statement = """
-    SELECT A.subject_id,
-             A.hadm_id,
+def static_data(hadm_ids_table: str):
+    #hadm_ids = ','.join(map(str, hadm_ids))
+    statement = f"""
+    SELECT   A.hadm_id,
              A.admittime,
              A.admission_type,
              A.admission_location,
@@ -112,12 +110,13 @@ def static_data(hadm_ids):
              A.religion,
              A.marital_status,
              A.ethnicity,
-             P.gender
+             P.gender,
+             date_diff('year', P.dob, A.admittime) age
     FROM mimiciii.admissions A
+    JOIN {hadm_ids_table} addmissions_list on addmissions_list.hadm_id = A.hadm_id
     LEFT JOIN mimiciii.patients P
         ON A.subject_id=P.subject_id
-    WHERE A.hadm_id IN ({});
-    """.format(hadm_ids)
+    """
     df = cursor.execute(statement).as_pandas()
     return df
 
@@ -141,18 +140,30 @@ def dataset_creation(hadm_ids: list, observation_window_hours: float):
     return df
 
 
-def prescriptions(hadm_ids: list, observation_window_hours: float):
+def prescriptions(hadm_ids_table: str):
     """
     Query to select antibiotics prescriptions 
     records based patients' hadm_id
     """
-    hadm_ids = ', '.join(map(str, hadm_ids))
-    time_window_hours = str(observation_window_hours)
+#     hadm_ids = ', '.join(map(str, hadm_ids))
+#     time_window_hours = str(observation_window_hours)
+    print(f"hadm_ids table: {hadm_ids_table}")
     query = f"""
-    WITH antibiotics AS (
-        SELECT *
-        FROM mimiciii.prescriptions
-        WHERE  
+        SELECT 
+        admissions.hadm_id,
+        antibiotics.startdate,
+        antibiotics.enddate,
+        antibiotics.drug,
+        admissions.admittime,
+        admissions_list.index_date
+        
+    FROM mimiciii.admissions admissions
+    JOIN mimiciii.prescriptions antibiotics
+        ON antibiotics.hadm_id = admissions.hadm_id
+    JOIN {hadm_ids_table} admissions_list 
+        on admissions_list.hadm_id = admissions.hadm_id
+            AND antibiotics.startdate <= admissions_list.index_date
+    WHERE  
         drug like '%Amikacin%' OR drug like '%Ampicillin%' OR
         drug like '%Cefazolin%' OR drug like '%Cefepime%' OR
         drug like '%Cefpodoxime%' OR drug like '%Ceftazidime%' OR
@@ -167,23 +178,8 @@ def prescriptions(hadm_ids: list, observation_window_hours: float):
         drug like '%Rifampin%' OR drug like '%Tetracycline%' OR
         drug like '%Tobramycin%' OR drug like '%Trimethoprim%' OR
         drug like '%Sulfonamide%' OR drug like '%Vancomycin%' OR
-        drug like '%Tazobactam%'         
-        )
-    SELECT 
-        A.hadm_id,
-        A.startdate,
-        A.enddate,
-        A.drug,
-        admissions.admittime,
-        admissions.admittime + interval '{time_window_hours}' hour as index_date
-        
-    FROM mimiciii.admissions
-    LEFT JOIN antibiotics A
-        ON A.hadm_id = admissions.hadm_id
-    WHERE 
-        A.startdate <= admissions.admittime + interval '{time_window_hours}' hour
-        AND A.hadm_id in ({hadm_ids})
-        
+        drug like '%Tazobactam%'
+    
     """
     
     
@@ -192,41 +188,44 @@ def prescriptions(hadm_ids: list, observation_window_hours: float):
     return df
 
 
-def previous_admissions(hadm_ids):
+def previous_admissions(hadm_ids_table: str):
     """
     Query to select previous admissions 
     records based patients' hadm_id
     """
-    hadm_ids = ','.join(map(str, hadm_ids)) 
-    query = """
+#     hadm_ids = ','.join(map(str, hadm_ids)) 
+    query = f"""
     SELECT
         admits.hadm_id,
         admits.admittime,
         admits2.hadm_id as prev_hadm_id,
         admits2.admittime as prev_admittime
     FROM mimiciii.admissions admits
+    JOIN {hadm_ids_table} addmissions_list 
+        on addmissions_list.hadm_id = admits.hadm_id
     LEFT JOIN mimiciii.admissions admits2
     ON admits.subject_id = admits2.subject_id
     WHERE 
         admits2.admittime < admits.admittime AND
-        admits2.admittime >= admits.admittime - interval '360' day AND
-        admits.hadm_id IN ({})
-        """.format(hadm_ids)
+        admits2.admittime >= admits.admittime - interval '360' day
+        """
     df = cursor.execute(query).as_pandas()
     return df
 
 
-def open_wounds_diags(hadm_ids):
+def open_wounds_diags(hadm_ids_table: str):
     """
     Query to select diagnosis of open wound
     records based patients' hadm_id
     """
-    hadm_ids = ','.join(map(str, hadm_ids)) 
-    query = """
+#     hadm_ids = ','.join(map(str, hadm_ids)) 
+    query = f"""
     SELECT 
-        hadm_id,
-        icd9_code
+        diagnoses_icd.hadm_id,
+        diagnoses_icd.icd9_code
     FROM mimiciii.diagnoses_icd
+    JOIN {hadm_ids_table} addmissions_list 
+        on addmissions_list.hadm_id = diagnoses_icd.hadm_id
     WHERE 
        (icd9_code like '870%' OR
         icd9_code like '871%' OR
@@ -237,8 +236,7 @@ def open_wounds_diags(hadm_ids):
         icd9_code like '876%' OR
         icd9_code like '877%' OR
         icd9_code like '878%' OR
-        icd9_code like '879%' ) AND
-        hadm_id IN ({})
-        """.format(hadm_ids)
+        icd9_code like '879%' ) 
+        """
     df = cursor.execute(query).as_pandas()
     return df

@@ -41,8 +41,9 @@ def lab_events(hadm_ids_table: str):
     LEFT JOIN mimiciii.d_labitems I
         ON E.itemid=I.itemid
     JOIN {hadm_ids_table} admissions_list 
-        on admissions_list.hadm_id = E.hadm_id
+        on admissions_list.subject_id = E.subject_id
         AND E.charttime <=  admissions_list.index_date
+        AND date_diff('day',E.charttime , admissions_list.admittime) <= 7
     WHERE  (lower(I.fluid) LIKE '%blood%'
             OR lower(I.fluid) LIKE '%urine%')
     """

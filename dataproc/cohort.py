@@ -147,6 +147,7 @@ def create_all_pts_within_observation_window(observation_window_hours) -> str:
     SELECT
         admits.subject_id,
         admits.hadm_id,
+        admits.admittime,
         admits.admittime + interval %(time_window_hours)s hour index_date,
         CASE WHEN admits.deathtime <= (admits.admittime + interval %(time_window_hours)s hour) THEN 1 ELSE 0 END AS death_during_obs_win,
         CASE WHEN admits.dischtime <= (admits.admittime + interval %(time_window_hours)s hour) THEN 1 ELSE 0 END AS disch_during_obs_win
@@ -155,7 +156,8 @@ def create_all_pts_within_observation_window(observation_window_hours) -> str:
     SELECT         
         admits.subject_id,
         admits.hadm_id,
-        admits.index_date
+        admits.index_date,
+        admits.admittime
     FROM admits
     WHERE 
           admits.death_during_obs_win != 1 

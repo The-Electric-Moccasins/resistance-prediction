@@ -99,9 +99,9 @@ def train_random_forest():
                                                    n_jobs=2
                         )
     else:
-        rf_params = dict(n_estimators=100,
+        rf_params = dict(n_estimators=200,
                                max_depth=10,
-                               #max_leaf_nodes=90,
+                               max_leaf_nodes=90,
                                max_features=0.3,
                                max_samples=0.9,
                                min_samples_leaf=10,
@@ -121,7 +121,7 @@ def train_xgboost():
     param_dist = dict(objective='binary:logistic',
                       n_estimators=100, # 170,
                       eval_metric='rmsle', # 'logloss',
-                      max_depth=4,
+                      max_depth=5,
                       eta=0.3,
                       booster='gbtree',
                       n_jobs=4,

@@ -253,10 +253,8 @@ def query_all_pts_within_observation_window(observation_window_hours):
 
 def remove_dups(df):
     """
-    When more than one microbiology test exists keep first.
-    In case when there are multiple tests use the same timestamp then
-    keep the one with 'RESISTANT_YN' = 1 or first available record
-    when all 'RESISTANT_YN' = 0.
+    If test has multiple records with the same 'charttime' then
+    choose max value for 'RESISTANT_YN' column
     """
     # # Sort values
     # df = df.sort_values(by=['subject_id','hadm_id','admittime','charttime','RESISTANT_YN'],

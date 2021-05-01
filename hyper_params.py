@@ -17,3 +17,4 @@ class HyperParams():
         self.validation_set_fraction = 0.10
         self.train_set_fraction = 0.80
         self.random_state = 11
+        self.num_of_bins_for_numerics = 6

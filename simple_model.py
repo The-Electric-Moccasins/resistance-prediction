@@ -16,7 +16,7 @@ params = HyperParams()
 from embeddings.dataloader import TheDataSet
 from embeddings.autoencoder import Autoencoder # so we can load this model
 
-USE_AUTOENCODER = False
+USE_AUTOENCODER = True
 
 
 def get_autoencoder():
@@ -92,9 +92,9 @@ def train_random_forest():
                                                    n_estimators=133,
                                                    max_depth=4,
                                                    max_leaf_nodes=70,
-                                                   max_features=0.8,
+                                                   max_features=0.33,
                                                    #max_samples=0.9,
-                                                   #min_samples_leaf=10,
+                                                   min_samples_leaf=10,
                                                    #min_samples_split=15,
                                                    n_jobs=2
                         )
@@ -120,7 +120,7 @@ def train_xgboost():
 
     param_dist = dict(objective='binary:logistic',
                       n_estimators=100, # 170,
-                      eval_metric='rmsle', # 'logloss',
+                      eval_metric='logloss', # 'rmsle', # 'logloss',
                       max_depth=5,
                       eta=0.3,
                       booster='gbtree',
@@ -134,8 +134,8 @@ def train_xgboost():
     return xgboost_cls
 
 
-# model = train_random_forest()
-model = train_xgboost()
+model = train_random_forest()
+# model = train_xgboost()
 y_validate_hat = model.predict(X_validate)
 print(f"predictions mean: {np.mean(y_validate_hat)}")
 simple_score = model.score(X_validate, y_validate)

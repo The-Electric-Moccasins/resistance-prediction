@@ -8,6 +8,7 @@ class Autoencoder(nn.Module):
         super(Autoencoder, self).__init__()
         self.encoder = nn.Sequential(
             nn.Linear(in_features=num_features, out_features=num_features // 2 , bias=True),
+            nn.Dropout(p = 0.1),
             nn.Tanh(),
             nn.Linear(in_features=num_features // 2, out_features=128, bias=True),
             nn.Tanh(),

@@ -16,7 +16,7 @@ params = HyperParams()
 from embeddings.dataloader import TheDataSet
 from embeddings.autoencoder import Autoencoder # so we can load this model
 
-USE_AUTOENCODER = False
+USE_AUTOENCODER = True
 
 
 def get_autoencoder():
@@ -34,7 +34,8 @@ def load_data():
     if USE_AUTOENCODER:
         print("Using AutoEncoder")
         autoencoder = get_autoencoder()
-        get_x = lambda x: autoencoder.encoder(x.float()).detach().numpy()
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        get_x = lambda x: autoencoder.encoder(x.float().to(device)).detach().to('cpu').numpy()
     else:
         print("Using Plain Embeddings")
         get_x = lambda x: x.detach().numpy()
@@ -89,12 +90,12 @@ def train_random_forest():
     print("Training Random Forest")
     if USE_AUTOENCODER:
         rf_params = dict(                          class_weight='balanced_subsample',
-                                                   n_estimators=133,
+                                                   n_estimators=100,
                                                    max_depth=4,
-                                                   max_leaf_nodes=70,
+#                                                    max_leaf_nodes=70,
                                                    max_features=0.8,
-                                                   #max_samples=0.9,
-                                                   #min_samples_leaf=10,
+                                                   max_samples=0.9,
+                                                   min_samples_leaf=10,
                                                    #min_samples_split=15,
                                                    n_jobs=2
                         )
@@ -134,8 +135,8 @@ def train_xgboost():
     return xgboost_cls
 
 
-# model = train_random_forest()
-model = train_xgboost()
+model = train_random_forest()
+# model = train_xgboost()
 y_validate_hat = model.predict(X_validate)
 print(f"predictions mean: {np.mean(y_validate_hat)}")
 simple_score = model.score(X_validate, y_validate)

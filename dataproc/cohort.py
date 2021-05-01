@@ -65,7 +65,8 @@ WHERE ab_name in
                 80040, -- NEISSERIA GONORRHOEAE
                 80008, -- ENTEROBACTER CLOACAE
                 80007, -- ENTEROBACTER AEROGENES
-                80002) -- ESCHERICHIA COLI
+                80002 -- ESCHERICHIA COLI
+                )
     )
 SELECT         
     admissions.subject_id,
@@ -87,6 +88,66 @@ WHERE admissions.time_to_rslt is not null
     df = as_pandas(cursor)
 
     return df
+
+
+def query_esbl_bacteria_label(observation_window_hours):
+    query = """
+    select hadm_id, max(RESISTANT_BACT) resistant_label from (
+WITH admissions AS (
+SELECT
+    admits.subject_id,
+    admits.hadm_id,
+    admits.admittime,
+    admits.deathtime, 
+    microb.charttime,
+    CASE WHEN admits.deathtime < microb.charttime THEN 1 ELSE 0 END AS death_before_rslt,
+    date_diff('hour', admits.admittime, microb.charttime) AS time_to_rslt,
+    CASE WHEN microb.interpretation in ('R','I') THEN 1 ELSE 0 END AS RESISTANT_YN,
+    CASE WHEN microb.interpretation in ('R','I','S') THEN org_itemid ELSE 0 END AS RESISTANT_BACT,
+    CASE WHEN microb.interpretation in ('S') THEN org_itemid ELSE 0 END AS SENSITIVE_BACT
+  
+FROM mimiciii.admissions admits
+INNER JOIN mimiciii.microbiologyevents microb
+    ON microb.hadm_id = admits.hadm_id 
+WHERE ab_name in 
+    -- ('CEFTAZIDIME') 
+    ('CEFAZOLIN', 'CEFEPIME', 'CEFPODOXIME', 'CEFTAZIDIME', 'CEFTRIAXONE', 'CEFUROXIME')
+    AND
+      org_itemid in (
+                80004, -- KLEBSIELLA PNEUMONIAE
+                80026, -- PSEUDOMONAS AERUGINOSA
+                80005, -- KLEBSIELLA OXYTOCA
+                80017, -- PROTEUS MIRABILIS
+                80040, -- NEISSERIA GONORRHOEAE
+                80008, -- ENTEROBACTER CLOACAE
+                80007, -- ENTEROBACTER AEROGENES
+                80002 -- ESCHERICHIA COLI
+                )
+    )
+SELECT         
+    admissions.subject_id,
+    admissions.hadm_id,
+    admissions.admittime,
+    admissions.charttime,
+    admissions.time_to_rslt,
+    RESISTANT_YN,
+    RESISTANT_BACT,
+    SENSITIVE_BACT
+FROM admissions
+WHERE admissions.time_to_rslt is not null
+      and admissions.time_to_rslt > %(time_window_hours)d
+
+) a
+group by 1
+    """
+    params = {
+        'time_window_hours': observation_window_hours
+    }
+    cursor.execute(query, params)
+    df = as_pandas(cursor)
+
+    return df
+
 
 def query_all_pts(observation_window_hours):
     """

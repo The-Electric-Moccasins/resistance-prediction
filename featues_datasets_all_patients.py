@@ -37,7 +37,7 @@ def run(params :HyperParams, binning_numerics=False, create_patients_list_view=T
     onehotrx_df = load_antibiotics(view_name_all_pts_within_observation_window)
 
     # Previous admissions:
-    admits_df = load_previous_admissions(view_name_all_pts_within_observation_window, params, binning_numerics=False)
+    admits_df = load_previous_admissions(view_name_all_pts_within_observation_window, params, binning_numerics)
 
     # Open Wounds Diagnosis:
     wounds_df = load_open_wounds(view_name_all_pts_within_observation_window)
@@ -69,13 +69,17 @@ def run(params :HyperParams, binning_numerics=False, create_patients_list_view=T
         df_dataset_unprocessed = clean_and_standardize_numeric_values(df_dataset_unprocessed)
     
 
-    # categorical values: One Hot Encode
-    df_dataset_processed = one_hot_encode_categorical(df_dataset_unprocessed)
+    
 
     # join on antibiotics, previous admissions and wound
+    df_dataset_processed = df_dataset_unprocessed
     df_dataset_processed = pd.merge(df_dataset_processed, onehotrx_df, on='hadm_id', how='left')
     df_dataset_processed = pd.merge(df_dataset_processed, admits_df, on='hadm_id', how='left')
     df_dataset_processed = pd.merge(df_dataset_processed, wounds_df, on='hadm_id', how='left')
+    
+    # categorical values: One Hot Encode
+    df_dataset_processed = one_hot_encode_categorical(df_dataset_unprocessed)
+    
     df_dataset_processed.fillna(0, inplace=True)
 
     df_final_dataset = df_dataset_processed
@@ -430,14 +434,15 @@ def pivot_flags_to_columns(df, binning_numerics):
     df.columns = [str(colname[1]) for colname in df.columns]
     
     if binning_numerics:
-        print("flags before binning")
-        print(df.columns.tolist())
-        df = pd.get_dummies(df, dummy_na=True, drop_first=True)
-        print("flags after binning")
-        print(df.columns.tolist())
-    
-    df = df.fillna(0)
-    df = df.astype('uint8')
+#         print("flags before binning")
+#         print(df.columns.tolist())
+#         df = pd.get_dummies(df, dummy_na=True, drop_first=True)
+#         print("flags after binning")
+#         print(df.columns.tolist())
+        pass
+    else:
+        df = df.fillna(0)
+        df = df.astype('uint8')
     df = df.reset_index(['hadm_id'])
     return df
 
@@ -522,6 +527,7 @@ def load_antibiotics(view_name_hadm_ids):
     rx = rx.drop_duplicates(subset=['hadm_id', 'drug'], keep='first')
     # One-hot encoder for prescriptions
     onehotrx_df = rx.pivot_table(index='hadm_id', columns='drug', values='value', fill_value=0).reset_index()
+    onehotrx_df.fillna(0)
     return onehotrx_df
 
 
@@ -535,6 +541,7 @@ def load_previous_admissions(view_name_hadm_ids, params, binning_numerics=False)
     else:
         # numeric values: clean and standardize
         admits_df = stanardize_numeric_values(admits_df, list_of_clms=['n_admits'])
+        
     
     print('Previous admits: ', admits_df.shape)
     print('--------------------------------------------------------------')

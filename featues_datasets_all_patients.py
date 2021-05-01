@@ -2,17 +2,17 @@ import numpy as np
 import pandas as pd
 from pandas import DataFrame
 
-from dataproc.io import write_dataframe
+from dataproc.io import write_dataframe, load_dataframe
 from dataproc import cohort
 from dataproc import create_dataset
-from dataproc.proc_utils import drop_sparse_columns, stanardize_numeric_values, replace_missing_val
+from dataproc.proc_utils import drop_sparse_columns, stanardize_numeric_values, replace_missing_val, bin_numerics
 
 from hyper_params import HyperParams
 
 DATA_DIR = 'data'
 
 
-def run(params :HyperParams):
+def run(params :HyperParams, binning_numerics=False, create_patients_list_view=True, create_lab_events=True):
     """
     Build feature datasets for ALL admissions that were still hospitalized
     by the end of the observation window
@@ -20,11 +20,13 @@ def run(params :HyperParams):
     """
 
     # create list of patients, max_observation_window
-    df_all_pts_within_observation_window, view_name_all_pts_within_observation_window = \
-        cohort.query_all_pts_within_observation_window(params.observation_window_hours)
-    write_dataframe(df_all_pts_within_observation_window, 'df_all_pts_within_observation_window')
-    # view_name_all_pts_within_observation_window = f'default.all_pts_{params.observation_window_hours}_hours'
-    # df_all_pts_within_observation_window = load_dataframe('df_all_pts_within_observation_window')
+    if create_patients_list_view: 
+        df_all_pts_within_observation_window, view_name_all_pts_within_observation_window = \
+            cohort.query_all_pts_within_observation_window(params.observation_window_hours)
+        write_dataframe(df_all_pts_within_observation_window, 'df_all_pts_within_observation_window')
+    else:
+        view_name_all_pts_within_observation_window = f'default.all_pts_{params.observation_window_hours}_hours'
+        df_all_pts_within_observation_window = load_dataframe('df_all_pts_within_observation_window')
 
     # generate features for all patients (under observation window)
 
@@ -35,18 +37,21 @@ def run(params :HyperParams):
     onehotrx_df = load_antibiotics(view_name_all_pts_within_observation_window)
 
     # Previous admissions:
-    admits_df = load_previous_admissions(view_name_all_pts_within_observation_window)
+    admits_df = load_previous_admissions(view_name_all_pts_within_observation_window, params, binning_numerics=False)
 
     # Open Wounds Diagnosis:
     wounds_df = load_open_wounds(view_name_all_pts_within_observation_window)
 
     # lab events
-    df_lab_events = load_lab_events(view_name_all_pts_within_observation_window)
+    if create_lab_events:
+        df_lab_events = load_lab_events(view_name_all_pts_within_observation_window)
+    else:
+        df_lab_events = load_dataframe('df_lab_events')
 
     # lab results
     df_lab_results = get_lab_results(df_lab_events)
 
-    df_lab_flags = get_lab_flags(df_lab_events)
+    df_lab_flags = get_lab_flags(df_lab_events, binning_numerics)
 
     # join lab results
     df_lab = df_lab_results.merge(df_lab_flags, how='left', on=['hadm_id'])
@@ -55,11 +60,17 @@ def run(params :HyperParams):
 
     df_dataset_unprocessed = join_static_and_lab_data(df_lab, df_static_data)
 
-    # numeric values: clean and standardize
-    df_dataset_unprocessed = clean_and_standardize_numeric_values(df_dataset_unprocessed)
+    
+    if binning_numerics:
+        # numeric values: bin
+        df_dataset_unprocessed = clean_and_bin_numeric_values(df_dataset_unprocessed, params)
+    else:
+        # numeric values: clean and standardize
+        df_dataset_unprocessed = clean_and_standardize_numeric_values(df_dataset_unprocessed)
+    
 
     # categorical values: One Hot Encode
-    df_dataset_processed = on_hot_encode_categorical(df_dataset_unprocessed)
+    df_dataset_processed = one_hot_encode_categorical(df_dataset_unprocessed)
 
     # join on antibiotics, previous admissions and wound
     df_dataset_processed = pd.merge(df_dataset_processed, onehotrx_df, on='hadm_id', how='left')
@@ -70,17 +81,20 @@ def run(params :HyperParams):
     df_final_dataset = df_dataset_processed
     print(f"df_final_dataset: {df_final_dataset.shape}")
     write_dataframe(df_final_dataset, 'df_final_dataset')
-    # df_dataset_processed = load_dataframe('df_final_dataset')
+    # df_final_dataset = load_dataframe('df_final_dataset')
 
     save_auto_encoder_training_data(df_final_dataset)
 
-    return df_final_dataset.reset_index()
+    return df_final_dataset
 
 
 
 def save_auto_encoder_training_data(df_features: DataFrame):
-    df_features['y'] = np.zeros((df_features.shape[0],))
-    autoencoder_fulldata = df_features.to_numpy()
+    df_temp = df_features.copy()
+    df_temp['y'] = np.zeros((df_features.shape[0],))
+    if 'hadm_id' in df_temp.columns:
+        df_temp = df_temp.drop(columns='hadm_id')
+    autoencoder_fulldata = df_temp.to_numpy()
     # Save to a file
     target_datafile = 'data/autoencoder_fulldata.npy'
     np.save(target_datafile, autoencoder_fulldata)
@@ -99,7 +113,7 @@ def load_static_features(view_name_all_pts_within_observation_window):
     return df_static_data
 
 
-def on_hot_encode_categorical(df_dataset_unprocessed):
+def one_hot_encode_categorical(df_dataset_unprocessed):
     categorical_cols = df_dataset_unprocessed.select_dtypes('object').columns.tolist()
     df_dataset_processed = pd.get_dummies(df_dataset_unprocessed,
                                           columns=categorical_cols,
@@ -113,7 +127,8 @@ def on_hot_encode_categorical(df_dataset_unprocessed):
 
 
 def clean_and_standardize_numeric_values(df_dataset_unprocessed):
-    columns_to_standardize = [col for col in df_dataset_unprocessed.columns.tolist() if not col.endswith('_flag')]
+    
+    columns_to_standardize = select_numeric_values_to_process(df_dataset_unprocessed)
     df_dataset_unprocessed = stanardize_numeric_values(df_dataset_unprocessed, columns_to_standardize)
     numeric_cols = df_dataset_unprocessed.select_dtypes('number')
     numeric_cols = [col for col in numeric_cols if not col.endswith('_flag')]
@@ -121,19 +136,39 @@ def clean_and_standardize_numeric_values(df_dataset_unprocessed):
     df_dataset_unprocessed = df_dataset_unprocessed.drop(columns=numeric_cols).join(df_new_numeric)
     return df_dataset_unprocessed
 
+def clean_and_bin_numeric_values(df, params):
+#     df = df.set_index('hadm_id')
+    columns_to_process = select_numeric_values_to_process(df)
+    
+#     bin_labels=[str(num) for num in range(1,params.num_of_bins_for_numerics+1)]
+#     print(bin_labels)
+    df = bin_numerics(dataset=df, 
+                        numeric_columns=columns_to_process, 
+                        bins=params.num_of_bins_for_numerics
+                        )
+    
+    return df
+
+def select_numeric_values_to_process(df):
+    df_tmp = df.select_dtypes(include='number')
+    columns_to_process = [col for col in df_tmp.columns.tolist() if not col.endswith('_flag') and not col=='hadm_id']
+    return columns_to_process
+    
+
+
 
 def join_static_and_lab_data(df_lab, df_static_data):
     df_lab = df_lab.set_index(['hadm_id'])
     df_static_data = df_static_data.set_index(['hadm_id'])
     df_dataset_unprocessed = df_lab.join(df_static_data, how='inner')  # join on index hadm_id
-    print(f"df_dataset_unprocessed: {df_dataset_unprocessed.shape}")
-    write_dataframe(df_dataset_unprocessed, 'df_dataset_unprocessed')
-    # df_dataset_unprocessed = load_dataframe('df_dataset_unprocessed')
+    print(f"join_static_and_lab_data: {df_dataset_unprocessed.shape}")
+    write_dataframe(df_dataset_unprocessed, 'join_static_and_lab_data')
+    # df_dataset_unprocessed = load_dataframe('join_static_and_lab_data')
     return df_dataset_unprocessed
 
 
-def get_lab_flags(df_lab_events):
-    df_lab_flags = pivot_flags_to_columns(df_lab_events)
+def get_lab_flags(df_lab_events, binning_numerics):
+    df_lab_flags = pivot_flags_to_columns(df_lab_events, binning_numerics)
     print(f"df_lab_flags: {df_lab_flags.shape}")
     write_dataframe(df_lab_flags, 'df_lab_flags')
     # df_lab_flags = load_dataframe('df_lab_flags')
@@ -143,7 +178,6 @@ def get_lab_flags(df_lab_events):
 
 def get_lab_results(df_lab_events):
     df_lab_results = pivot_labtests_to_columns(df_lab_events)
-    df_lab_results.shape
     fix_lab_results_categories(df_lab_results)
     df_lab_results = df_lab_results.drop(columns=['50827', '50856', '51100', '51482', '50981'])
     print(f"shape before dropping sparses {df_lab_results.shape}")
@@ -383,15 +417,27 @@ def pivot_labtests_to_columns(df):
     return df
 
 
-def pivot_flags_to_columns(df):
+def pivot_flags_to_columns(df, binning_numerics):
     df = df.copy()
-    df['flag'] = df['flag'].fillna('False').map({'abnormal': 1, 'delta': 1, 'False': -1})
+    if binning_numerics:
+        value_map = {'abnormal': "Abnormal", 'delta': "Abnormal", 'False': "Normal"}
+    else:
+        value_map = {'abnormal': 1, 'delta': 1, 'False': -1}
+    df['flag'] = df['flag'].fillna('False').map(value_map)
     df['flag_name'] = df['itemid'].astype(str) + pd.Series(["_flag"] * df.shape[0]).astype(str)
     df = df.pivot(index=['hadm_id'], columns=['flag_name'], values=['flag'])
     df.columns = df.columns.to_flat_index()
     df.columns = [str(colname[1]) for colname in df.columns]
+    
+    if binning_numerics:
+        print("flags before binning")
+        print(df.columns.tolist())
+        df = pd.get_dummies(df, dummy_na=True, drop_first=True)
+        print("flags after binning")
+        print(df.columns.tolist())
+    
     df = df.fillna(0)
-    df = df.astype('int8')
+    df = df.astype('uint8')
     df = df.reset_index(['hadm_id'])
     return df
 
@@ -479,10 +525,17 @@ def load_antibiotics(view_name_hadm_ids):
     return onehotrx_df
 
 
-def load_previous_admissions(view_name_hadm_ids):
+def load_previous_admissions(view_name_hadm_ids, params, binning_numerics=False):
     admits = create_dataset.previous_admissions(view_name_hadm_ids)
     admits_df = admits.groupby('hadm_id').agg({'prev_hadm_id': 'nunique'}).reset_index()
     admits_df = admits_df.rename(columns={'prev_hadm_id': 'n_admits'})
+    if binning_numerics:
+        # numeric values: bin
+        admits_df = bin_numerics(dataset=admits_df, numeric_columns=['n_admits'], bins=params.num_of_bins_for_numerics)
+    else:
+        # numeric values: clean and standardize
+        admits_df = stanardize_numeric_values(admits_df, list_of_clms=['n_admits'])
+    
     print('Previous admits: ', admits_df.shape)
     print('--------------------------------------------------------------')
     return admits_df

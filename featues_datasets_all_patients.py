@@ -85,6 +85,7 @@ def run(params :HyperParams, binning_numerics=False, create_patients_list_view=T
     df_final_dataset = df_dataset_processed
     print(f"df_final_dataset: {df_final_dataset.shape}")
     write_dataframe(df_final_dataset, 'df_final_dataset')
+    print(f"dataset data saved as 'df_final_dataset'")
     # df_final_dataset = load_dataframe('df_final_dataset')
 
     save_auto_encoder_training_data(df_final_dataset)
@@ -102,7 +103,7 @@ def save_auto_encoder_training_data(df_features: DataFrame):
     # Save to a file
     target_datafile = 'data/autoencoder_fulldata.npy'
     np.save(target_datafile, autoencoder_fulldata)
-    print(f"autoencoder training data saved to {target_datafile}")
+    print(f"autoencoder training data (with y=0) was saved to {target_datafile}")
 
 
 

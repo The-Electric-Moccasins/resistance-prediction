@@ -240,3 +240,48 @@ def open_wounds_diags(hadm_ids_table: str):
         """
     df = cursor.execute(query).as_pandas()
     return df
+
+
+def intubation_cpt(hadm_ids_table: str):
+    """
+    Query to select intubation procedure
+    records based patients' hadm_id
+    """
+#     hadm_ids = ','.join(map(str, hadm_ids)) 
+    query = f"""
+    SELECT 
+        cptevents.hadm_id,
+        cptevents.chartdate,
+        cptevents.cpt_cd
+    FROM mimiciii.cptevents
+    JOIN {hadm_ids_table} addmissions_list 
+        on addmissions_list.hadm_id = cptevents.hadm_id
+    WHERE 
+       cpt_cd IN ('31500','32000','32002')
+        """
+    df = cursor.execute(query).as_pandas()
+    return df
+
+
+def noteevents(hadm_ids_table: str, observation_window_hours: float):
+    """
+    Query to select note events 
+    based on patients' hadm_id
+    """
+    # hadm_ids = ', '.join(map(str, hadm_ids))
+    time_window_hours = str(observation_window_hours)
+    query = f"""
+    SELECT 
+        addmissions_list.hadm_id,
+        noteevents.row_id,
+        noteevents.charttime,
+        noteevents.text
+    FROM {hadm_ids_table} addmissions_list 
+    LEFT JOIN mimiciii.noteevents
+        ON addmissions_list.hadm_id = noteevents.hadm_id
+    WHERE 
+        iserror IS NULL AND
+        noteevents.charttime <= admissions.admittime + interval '{time_window_hours}' hour 
+        """
+    df = cursor.execute(query).as_pandas()
+    return df

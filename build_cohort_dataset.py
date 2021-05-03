@@ -56,26 +56,30 @@ def build_cohort_bact(params: HyperParams, df_features: DataFrame):
 
 def build_cohort_multi_bact(params: HyperParams, df_features: DataFrame):
 
-    df_cohort = load_bacteria_labels(params)
-    # df_cohort = load_dataframe('df_cohort')
+    df_cohort_multi_bacteria_labels = load_multi_bacteria_labels(params)
+    df_cohort_no_dupes = cohort.remove_dups_multi_label(df_cohort_multi_bacteria_labels)
+    df_cohort_no_dupes = df_cohort_no_dupes.reset_index()[['hadm_id','org_id']]
+    df_cohort_multi_bacteria_labels = df_cohort_no_dupes.pivot(index=['hadm_id'], columns=['org_id'], values=['org_id']).notna().astype('uint8')
+    df_cols = df_cohort_multi_bacteria_labels.columns.to_flat_index()
+    df_cohort_multi_bacteria_labels.columns = ['label_' + str(colname[1]) for colname in df_cols]
 
-    # Join the cohort on the features
-    df_full_data = df_cohort.set_index(['hadm_id']).join(df_features.reset_index().set_index(['hadm_id']), how='inner')
+    
+    df_cohort_multi_bacteria_labels = df_cohort_multi_bacteria_labels.join(df_features.reset_index().set_index(['hadm_id']), how='inner')
 
-    df_full_data = set_target_feature_name(df_full_data, 'resistant_label', 'y')
+#     df_full_data = set_target_feature_name(df_full_data, 'resistant_label', 'y')
 
-    print(f"cohort dataset: {df_full_data.shape}")
+    print(f"cohort dataset: {df_cohort_multi_bacteria_labels.shape}")
 
-    write_dataframe(df_full_data, 'df_full_data')
+    write_dataframe(df_cohort_multi_bacteria_labels, 'df_full_data_multi_bact')
 
-    # df_full_data = load_dataframe('df_full_data')
-    np_fulldata = df_full_data.to_numpy()
+#     # df_full_data = load_dataframe('df_full_data')
+    np_fulldata = df_cohort_multi_bacteria_labels.to_numpy()
     # Save to a file
-    datafile = 'data/fulldata_multilabel.npy'
+    datafile = 'data/fulldata_multi_bacteria_label.npy'
     np.save(datafile, np_fulldata)
     print(f"cohort data saved to {datafile}")
 
-    return df_full_data
+    return df_cohort_multi_bacteria_labels
 
 
 
@@ -106,8 +110,8 @@ def load_bacteria_labels(params):
     return df_cohort
 
 def load_multi_bacteria_labels(params):
-    df_cohort = cohort.query_pts_multi_bacteria(params.observation_window_hours)
-    df_cohort = df_cohort[['hadm_id', 'resistant_label']]
-    print(f"df_labels: {df_cohort.shape}")
-    write_dataframe(df_cohort, 'df_cohort')
-    return df_cohort
+    df_cohort_multi_bacteria_labels = cohort.query_pts_multi_bacteria(params.observation_window_hours)
+#     df_cohort = df_cohort[['hadm_id', 'org_id']]
+    print(f"df_cohort_multi_bacteria_labels: {df_cohort_multi_bacteria_labels.shape}")
+    write_dataframe(df_cohort_multi_bacteria_labels, 'df_cohort_multi_bacteria_labels')
+    return df_cohort_multi_bacteria_labels

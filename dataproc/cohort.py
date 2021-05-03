@@ -123,7 +123,7 @@ WHERE microb.spec_itemid is not null
                 80007, -- ENTEROBACTER AEROGENES
                 80002
                 )
-                -- or (spec_type_desc = 'MRSA SCREEN' and org_itemid is null) -- negative for mrsa
+                or (spec_type_desc = 'MRSA SCREEN' and org_itemid is null) -- negative for mrsa
              )
   )
 SELECT         

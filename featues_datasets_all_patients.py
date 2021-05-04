@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pandas as pd
 from pandas import DataFrame
@@ -42,6 +44,14 @@ def run(params :HyperParams, binning_numerics=False, create_patients_list_view=T
     # Open Wounds Diagnosis:
     wounds_df = load_open_wounds(view_name_all_pts_within_observation_window)
 
+    # Intubation procedures:
+    df_intubation = load_intubation_procedures(view_name_all_pts_within_observation_window)
+
+    # Note Events:
+    notes = load_notes(params, view_name_all_pts_within_observation_window)
+
+    df_antibiotics_history = load_antibiotics_history(notes)
+
     # lab events
     if create_lab_events:
         df_lab_events = load_lab_events(view_name_all_pts_within_observation_window)
@@ -76,9 +86,11 @@ def run(params :HyperParams, binning_numerics=False, create_patients_list_view=T
     df_dataset_processed = pd.merge(df_dataset_processed, onehotrx_df, on='hadm_id', how='left')
     df_dataset_processed = pd.merge(df_dataset_processed, admits_df, on='hadm_id', how='left')
     df_dataset_processed = pd.merge(df_dataset_processed, wounds_df, on='hadm_id', how='left')
-    
+    df_dataset_processed = pd.merge(df_dataset_processed, df_intubation, on='hadm_id', how='left')
+    df_dataset_processed = pd.merge(df_dataset_processed, df_antibiotics_history, on='hadm_id', how='left')
+
     # categorical values: One Hot Encode
-    df_dataset_processed = one_hot_encode_categorical(df_dataset_unprocessed)
+    df_dataset_processed = one_hot_encode_categorical(df_dataset_processed)
     
     df_dataset_processed.fillna(0, inplace=True)
 
@@ -558,3 +570,60 @@ def load_open_wounds(view_name_hadm_ids):
     print('Open wounds: ', wounds_df.shape)
     print('--------------------------------------------------------------')
     return wounds_df
+
+
+def load_antibiotics_history(notes):
+    # List antibiotics
+    antibitics_list = ['antibiotic', 'antibiotics', 'amikacin', 'ampicillin', 'sulbactam',
+                       'cefazolin', 'cefepime', 'cefpodoxime', 'ceftazidime',
+                       'ceftriaxone', 'cefuroxime', 'chloramphenicol', 'ciprofloxacin',
+                       'clindamycin', 'daptomycin', 'erythromycin', 'gentamicin', 'imipenem',
+                       'levofloxacin', 'linezolid', 'meropenem', 'nitrofurantoin', 'oxacillin',
+                       'penicillin', 'penicillin G', 'piperacillin', 'tazobactam',
+                       'rifampin', 'tetracycline', 'tobramycin', 'trimethoprim', 'vancomycin']
+    notes_check = pd.DataFrame()
+    for n, df in notes.groupby('row_id'):
+        # using list comprehension to check if string contains list element
+        res = [ele for ele in antibitics_list if (ele in df['clean_tx'].values[0])]
+        if len(res) >= 1:
+            # print(len(res))
+            # print(df['clean_tx'].values[0])
+            data = pd.DataFrame({'row_id': [n], 'hadm_id': [df['hadm_id'].values[0]], 'antibiotic_yn': [1]})
+            notes_check = notes_check.append(data, ignore_index=True)
+    # Group on hadm_id
+    notes_check = notes_check.groupby(['hadm_id']).agg({'antibiotic_yn': 'max'}).reset_index()
+    print('Anibiotic in notes: ', notes_check.shape)
+    print('--------------------------------------------------------------')
+    return notes_check
+
+
+def load_notes(params, view_name_all_pts_within_observation_window):
+    notes = create_dataset.noteevents(view_name_all_pts_within_observation_window, params.observation_window_hours)
+    # Clean notes
+    notes = clean_text(df=notes, text_field='text')
+    return notes
+
+
+def clean_text(df, text_field='text'):
+    """
+    Preparing patient notes for processing
+    """
+    df['clean_tx'] = df['text'].str.lower()
+    df['clean_tx'] = df['clean_tx'].apply(lambda elem: re.sub(r"(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)|^rt|http.+?", "", elem))
+    df['clean_tx'] = df['clean_tx'].apply(lambda elem: re.sub(r"\d+", "", elem))
+
+    return df
+
+
+def load_intubation_procedures(view_name_all_pts_within_observation_window):
+    intubation = create_dataset.intubation_cpt(view_name_all_pts_within_observation_window)
+    intubation['intubation'] = 1  # intubation indicator column
+    # Group on hand_id & drop cpt code and date columns
+    intubation = intubation.drop_duplicates(subset=['hadm_id'], keep='first')
+    intubation = intubation.drop(columns=['chartdate', 'cpt_cd'])
+    print('Intubation records: ', intubation.shape)
+    print('--------------------------------------------------------------')
+    return intubation
+
+
+

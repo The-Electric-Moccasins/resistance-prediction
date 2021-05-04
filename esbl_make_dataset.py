@@ -213,7 +213,7 @@ def clean_text(df, text_field='text'):
     df['clean_tx'] = df['clean_tx'].apply(lambda elem: re.sub(r"\d+", "", elem))
 
     return df
-   
+
 
 
 if __name__ == '__main__':
@@ -265,15 +265,15 @@ if __name__ == '__main__':
         # Clean notes
         notes = clean_text(df=notes, text_field='text')
         # List antibiotics
-        antibitics_list = ['antibiotic', 'antibiotics','amikacin', 'ampicillin', 'sulbactam', 
-                           'cefazolin', 'cefepime', 'cefpodoxime', 'ceftazidime', 
-                           'ceftriaxone', 'cefuroxime', 'chloramphenicol', 'ciprofloxacin', 
-                           'clindamycin', 'daptomycin', 'erythromycin', 'gentamicin', 'imipenem', 
-                           'levofloxacin', 'linezolid', 'meropenem', 'nitrofurantoin', 'oxacillin', 
-                           'penicillin', 'penicillin G', 'piperacillin', 'tazobactam', 
+        antibitics_list = ['antibiotic', 'antibiotics','amikacin', 'ampicillin', 'sulbactam',
+                           'cefazolin', 'cefepime', 'cefpodoxime', 'ceftazidime',
+                           'ceftriaxone', 'cefuroxime', 'chloramphenicol', 'ciprofloxacin',
+                           'clindamycin', 'daptomycin', 'erythromycin', 'gentamicin', 'imipenem',
+                           'levofloxacin', 'linezolid', 'meropenem', 'nitrofurantoin', 'oxacillin',
+                           'penicillin', 'penicillin G', 'piperacillin', 'tazobactam',
                            'rifampin', 'tetracycline', 'tobramycin', 'trimethoprim', 'vancomycin']
-        
-        
+
+
         notes_check = pd.DataFrame()
         for n, df in notes.groupby('row_id'):
             # using list comprehension to check if string contains list element
@@ -286,7 +286,8 @@ if __name__ == '__main__':
         # Group on hadm_id
         notes_check = notes_check.groupby(['hadm_id']).agg({'antibiotic_yn':'max'}).reset_index()
         print('Anibiotic in notes: ', notes_check.shape)
-        print('--------------------------------------------------------------') 
+        print('--------------------------------------------------------------')
+        notes_check.head()
         
         # Lab and Static data features:
         features = dataset_creation(pts_labels['hadm_id'], params.observation_window_hours)

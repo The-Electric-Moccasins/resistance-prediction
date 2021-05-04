@@ -253,16 +253,18 @@ def query_all_pts_within_observation_window(observation_window_hours):
 
 def remove_dups(df):
     """
-    When more than one microbiology test exists keep first.
-    In case when there are multiple tests use the same timestamp then
-    keep the one with 'RESISTANT_YN' = 1 or first available record
-    when all 'RESISTANT_YN' = 0.
+    If test has multiple records with the same 'charttime' then
+    choose max value for 'RESISTANT_YN' column
     """
-    # Sort values
-    df = df.sort_values(by=['subject_id','hadm_id','admittime','charttime','RESISTANT_YN'],
-                       ascending = [True, True, True, True, False])
-    # Remove duplicates
-    df = df.drop_duplicates(subset=['subject_id','hadm_id','admittime'], keep='first')
+    # # Sort values
+    # df = df.sort_values(by=['subject_id','hadm_id','admittime','charttime','RESISTANT_YN'],
+    #                    ascending = [True, True, True, True, False])
+    # # Remove duplicates
+    # df = df.drop_duplicates(subset=['subject_id','hadm_id','admittime'], keep='first')
+    
+    # Groupby admission id, admit time and chart time to find ristance max
+    df = df.groupby(['subject_id','hadm_id','admittime','charttime']).agg({'RESISTANT_YN':'max'}).reset_index()
+    
     return df
 
 def observation_window(df, window_size):
@@ -271,8 +273,12 @@ def observation_window(df, window_size):
     to admission time. Select records when the index date
     is before microbiology test results.
     """
+    
     # Index date equals to admit time plus selected observation window
     df['index_date'] = df['admittime'] + pd.to_timedelta(window_size, unit='h')
     # Exclude cases when the diagnosis of resistant bacteria is earlier than index_date
     subset = df[df['index_date'] < df['charttime']]
+    # Keep one label per patient
+    subset = subset.groupby(['subject_id','hadm_id','admittime','index_date']).agg({'RESISTANT_YN':'max'}).reset_index()
+    
     return subset

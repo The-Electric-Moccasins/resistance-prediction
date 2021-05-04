@@ -22,7 +22,7 @@ class Autoencoder(nn.Module):
             nn.ReLU(),
             nn.Linear(in_features=num_features // 2, out_features=num_features, bias=True ),
             #nn.Sigmoid()
-            nn.ReLU()
+            nn.Tanh()
 #             nn.Tanh()
         )
 

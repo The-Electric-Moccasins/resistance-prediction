@@ -12,13 +12,13 @@ from dataproc.roc_auc_curves import plt_roc_auc_curve, plt_precision_recall_curv
 from dataproc.create_dataset import dataset_creation
 from dataproc.create_dataset import prescriptions
 from dataproc.create_dataset import previous_admissions
-from dataproc.create_dataset import open_wounds_diags
+from dataproc.create_dataset import open_wounds_diags, intubation_cpt, noteevents
 from dataproc.embeddings import loinc_values
 from hyper_params import HyperParams
 import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
-
+import re
 # load hyperparams instance
 params = HyperParams()
 
@@ -206,7 +206,14 @@ def clean_static_demog_vars(df, staticvars):
     df = df[columns].copy()
         
     return df
-   
+
+def clean_text(df, text_field='text'):
+    df['clean_tx'] =  df['text'].str.lower()
+    df['clean_tx'] = df['clean_tx'].apply(lambda elem: re.sub(r"(@[A-Za-z0-9]+)|([^0-9A-Za-z \t])|(\w+:\/\/\S+)|^rt|http.+?", "", elem)) 
+    df['clean_tx'] = df['clean_tx'].apply(lambda elem: re.sub(r"\d+", "", elem))
+
+    return df
+
 
 
 if __name__ == '__main__':
@@ -242,7 +249,45 @@ if __name__ == '__main__':
         wounds_df = wounds.drop_duplicates(subset=['hadm_id'], keep = 'first')
         wounds_df = wounds_df.drop(columns='icd9_code')
         print('Open wounds: ', wounds_df.shape)
-        print('--------------------------------------------------------------')    
+        print('--------------------------------------------------------------')   
+        
+        # Intubation procedures:
+        intubation = intubation_cpt(pts_labels['hadm_id'])
+        intubation['intubation'] = 1 # intubation indicator column
+        # Group on hand_id & drop cpt code and date columns
+        intubation = intubation.drop_duplicates(subset=['hadm_id'], keep = 'first')
+        intubation = intubation.drop(columns=['chartdate', 'cpt_cd'])
+        print('Intubation records: ', intubation.shape)
+        print('--------------------------------------------------------------') 
+        
+        # Note Events:
+        notes = noteevents(pts_labels['hadm_id'], params.observation_window_hours)
+        # Clean notes
+        notes = clean_text(df=notes, text_field='text')
+        # List antibiotics
+        antibitics_list = ['antibiotic', 'antibiotics','amikacin', 'ampicillin', 'sulbactam',
+                           'cefazolin', 'cefepime', 'cefpodoxime', 'ceftazidime',
+                           'ceftriaxone', 'cefuroxime', 'chloramphenicol', 'ciprofloxacin',
+                           'clindamycin', 'daptomycin', 'erythromycin', 'gentamicin', 'imipenem',
+                           'levofloxacin', 'linezolid', 'meropenem', 'nitrofurantoin', 'oxacillin',
+                           'penicillin', 'penicillin G', 'piperacillin', 'tazobactam',
+                           'rifampin', 'tetracycline', 'tobramycin', 'trimethoprim', 'vancomycin']
+
+
+        notes_check = pd.DataFrame()
+        for n, df in notes.groupby('row_id'):
+            # using list comprehension to check if string contains list element
+            res = [ele for ele in antibitics_list if(ele in df['clean_tx'].values[0])]
+            if len(res) >=1:
+                # print(len(res))
+                # print(df['clean_tx'].values[0])
+                data = pd.DataFrame({'row_id': [n], 'hadm_id': [df['hadm_id'].values[0]], 'antibiotic_yn': [1]})
+                notes_check = notes_check.append(data, ignore_index=True)
+        # Group on hadm_id
+        notes_check = notes_check.groupby(['hadm_id']).agg({'antibiotic_yn':'max'}).reset_index()
+        print('Anibiotic in notes: ', notes_check.shape)
+        print('--------------------------------------------------------------')
+        notes_check.head()
         
         # Lab and Static data features:
         features = dataset_creation(pts_labels['hadm_id'], params.observation_window_hours)

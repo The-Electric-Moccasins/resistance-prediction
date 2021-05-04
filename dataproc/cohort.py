@@ -38,47 +38,47 @@ def query_esbl_pts(observation_window_hours):
     and link them to patient's admission time
     """
     query = """
-WITH admissions AS (
-SELECT
-    admits.subject_id,
-    admits.hadm_id,
-    admits.admittime,
-    admits.deathtime, 
-    microb.charttime,
-    CASE WHEN admits.deathtime < microb.charttime THEN 1 ELSE 0 END AS death_before_rslt,
-    date_diff('hour', admits.admittime, microb.charttime) AS time_to_rslt,
-    CASE WHEN microb.interpretation in ('R','I') THEN 1 ELSE 0 END AS RESISTANT_YN,
-    CASE WHEN microb.interpretation = 'S' THEN 1 ELSE 0 END SENSITIVE_YN
-FROM mimiciii.admissions admits
-INNER JOIN mimiciii.microbiologyevents microb
-    ON microb.hadm_id = admits.hadm_id 
-WHERE ab_name in 
-    -- ('CEFTAZIDIME') 
-    ('CEFAZOLIN', 'CEFEPIME', 'CEFPODOXIME',
-                  'CEFTAZIDIME', 'CEFTRIAXONE', 'CEFUROXIME')
-    AND
-      org_itemid in (
-                80004, -- KLEBSIELLA PNEUMONIAE
-                80026, -- PSEUDOMONAS AERUGINOSA
-                80005, -- KLEBSIELLA OXYTOCA
-                80017, -- PROTEUS MIRABILIS
-                80040, -- NEISSERIA GONORRHOEAE
-                80008, -- ENTEROBACTER CLOACAE
-                80007, -- ENTEROBACTER AEROGENES
-                80002 -- ESCHERICHIA COLI
-                )
-    )
-SELECT         
-    admissions.subject_id,
-    admissions.hadm_id,
-    admissions.admittime,
-    admissions.charttime,
-    admissions.time_to_rslt,
-    RESISTANT_YN,
-    SENSITIVE_YN
-FROM admissions
-WHERE admissions.time_to_rslt is not null
-      and admissions.time_to_rslt > %(time_window_hours)d
+    WITH admissions AS (
+    SELECT
+        admits.subject_id,
+        admits.hadm_id,
+        admits.admittime,
+        admits.deathtime, 
+        microb.charttime,
+        CASE WHEN admits.deathtime < microb.charttime THEN 1 ELSE 0 END AS death_before_rslt,
+        date_diff('hour', admits.admittime, microb.charttime) AS time_to_rslt,
+        CASE WHEN microb.interpretation in ('R','I') THEN 1 ELSE 0 END AS RESISTANT_YN,
+        CASE WHEN microb.interpretation = 'S' THEN 1 ELSE 0 END SENSITIVE_YN
+    FROM mimiciii.admissions admits
+    INNER JOIN mimiciii.microbiologyevents microb
+        ON microb.hadm_id = admits.hadm_id 
+    WHERE ab_name in 
+        -- ('CEFTAZIDIME') 
+        ('CEFAZOLIN', 'CEFEPIME', 'CEFPODOXIME',
+                      'CEFTAZIDIME', 'CEFTRIAXONE', 'CEFUROXIME')
+        AND
+          org_itemid in (
+                    80004, -- KLEBSIELLA PNEUMONIAE
+                    80026, -- PSEUDOMONAS AERUGINOSA
+                    80005, -- KLEBSIELLA OXYTOCA
+                    80017, -- PROTEUS MIRABILIS
+                    80040, -- NEISSERIA GONORRHOEAE
+                    80008, -- ENTEROBACTER CLOACAE
+                    80007, -- ENTEROBACTER AEROGENES
+                    80002 -- ESCHERICHIA COLI
+                    )
+        )
+    SELECT         
+        admissions.subject_id,
+        admissions.hadm_id,
+        admissions.admittime,
+        admissions.charttime,
+        admissions.time_to_rslt,
+        RESISTANT_YN,
+        SENSITIVE_YN
+    FROM admissions
+    WHERE admissions.time_to_rslt is not null
+          and admissions.time_to_rslt > %(time_window_hours)d
 
 """
     params = {
@@ -93,53 +93,110 @@ WHERE admissions.time_to_rslt is not null
 def query_esbl_bacteria_label(observation_window_hours):
     query = """
     select hadm_id, max(RESISTANT_BACT) resistant_label from (
-WITH admissions AS (
-SELECT
-    admits.subject_id,
-    admits.hadm_id,
-    admits.admittime,
-    admits.deathtime, 
-    microb.charttime,
-    CASE WHEN admits.deathtime < microb.charttime THEN 1 ELSE 0 END AS death_before_rslt,
-    date_diff('hour', admits.admittime, microb.charttime) AS time_to_rslt,
-    CASE WHEN microb.interpretation in ('R','I') THEN 1 ELSE 0 END AS RESISTANT_YN,
-    CASE WHEN microb.interpretation in ('R','I','S') THEN org_itemid ELSE 0 END AS RESISTANT_BACT,
-    CASE WHEN microb.interpretation in ('S') THEN org_itemid ELSE 0 END AS SENSITIVE_BACT
-  
-FROM mimiciii.admissions admits
-INNER JOIN mimiciii.microbiologyevents microb
-    ON microb.hadm_id = admits.hadm_id 
-WHERE ab_name in 
-    -- ('CEFTAZIDIME') 
-    ('CEFAZOLIN', 'CEFEPIME', 'CEFPODOXIME', 'CEFTAZIDIME', 'CEFTRIAXONE', 'CEFUROXIME')
-    AND
-      org_itemid in (
-                80004, -- KLEBSIELLA PNEUMONIAE
-                80026, -- PSEUDOMONAS AERUGINOSA
-                80005, -- KLEBSIELLA OXYTOCA
-                80017, -- PROTEUS MIRABILIS
-                80040, -- NEISSERIA GONORRHOEAE
-                80008, -- ENTEROBACTER CLOACAE
-                80007, -- ENTEROBACTER AEROGENES
-                80002 -- ESCHERICHIA COLI
-                )
-    )
-SELECT         
-    admissions.subject_id,
-    admissions.hadm_id,
-    admissions.admittime,
-    admissions.charttime,
-    admissions.time_to_rslt,
-    RESISTANT_YN,
-    RESISTANT_BACT,
-    SENSITIVE_BACT
-FROM admissions
-WHERE admissions.time_to_rslt is not null
-      and admissions.time_to_rslt > %(time_window_hours)d
-
-) a
-group by 1
+    WITH admissions AS (
+    SELECT
+        admits.subject_id,
+        admits.hadm_id,
+        admits.admittime,
+        admits.deathtime, 
+        microb.charttime,
+        CASE WHEN admits.deathtime < microb.charttime THEN 1 ELSE 0 END AS death_before_rslt,
+        date_diff('hour', admits.admittime, microb.charttime) AS time_to_rslt,
+        CASE WHEN microb.interpretation in ('R','I') THEN 1 ELSE 0 END AS RESISTANT_YN,
+        CASE WHEN microb.interpretation in ('R','I','S') THEN org_itemid ELSE 0 END AS RESISTANT_BACT,
+        CASE WHEN microb.interpretation in ('S') THEN org_itemid ELSE 0 END AS SENSITIVE_BACT
+    
+    FROM mimiciii.admissions admits
+    INNER JOIN mimiciii.microbiologyevents microb
+        ON microb.hadm_id = admits.hadm_id 
+    WHERE ab_name in 
+        -- ('CEFTAZIDIME') 
+        ('CEFAZOLIN', 'CEFEPIME', 'CEFPODOXIME', 'CEFTAZIDIME', 'CEFTRIAXONE', 'CEFUROXIME')
+        AND
+          org_itemid in (
+                    80004, -- KLEBSIELLA PNEUMONIAE
+                    80026, -- PSEUDOMONAS AERUGINOSA
+                    80005, -- KLEBSIELLA OXYTOCA
+                    80017, -- PROTEUS MIRABILIS
+                    80040, -- NEISSERIA GONORRHOEAE
+                    80008, -- ENTEROBACTER CLOACAE
+                    80007, -- ENTEROBACTER AEROGENES
+                    80002 -- ESCHERICHIA COLI
+                    )
+        )
+    SELECT         
+        admissions.subject_id,
+        admissions.hadm_id,
+        admissions.admittime,
+        admissions.charttime,
+        admissions.time_to_rslt,
+        RESISTANT_YN,
+        RESISTANT_BACT,
+        SENSITIVE_BACT
+    FROM admissions
+    WHERE admissions.time_to_rslt is not null
+          and admissions.time_to_rslt > %(time_window_hours)d
+    
+    ) a
+    group by 1
     """
+    params = {
+        'time_window_hours': observation_window_hours
+    }
+    cursor.execute(query, params)
+    df = as_pandas(cursor)
+
+    return df
+
+
+def query_pts_multi_bacteria(observation_window_hours):
+    """
+    Query to select multi bacteria microbiology tests
+    and link them to patient's admission time
+    """
+    query = """
+    WITH admissions AS (
+    SELECT
+        admits.subject_id,
+        admits.hadm_id,
+        admits.admittime,
+        admits.deathtime, 
+        microb.charttime,
+        microb.org_itemid org_id,
+        CASE WHEN admits.deathtime < microb.charttime THEN 1 ELSE 0 END AS death_before_rslt,
+        date_diff('hour', admits.admittime, microb.charttime) AS time_to_rslt
+    FROM mimiciii.admissions admits
+    INNER JOIN mimiciii.microbiologyevents microb
+        ON microb.hadm_id = admits.hadm_id 
+    WHERE microb.spec_itemid is not null
+            and charttime is not null
+            and (
+                     org_itemid in (
+                    80293, -- positive for MRSA
+                    80004, -- KLEBSIELLA PNEUMONIAE
+                    80026, -- PSEUDOMONAS AERUGINOSA
+                    80005, -- KLEBSIELLA OXYTOCA
+                    80017, -- PROTEUS MIRABILIS
+                    80040, -- NEISSERIA GONORRHOEAE
+                    80008, -- ENTEROBACTER CLOACAE
+                    80007, -- ENTEROBACTER AEROGENES
+                    80002
+                    )
+                    or (spec_type_desc = 'MRSA SCREEN' and org_itemid is null) -- negative for mrsa
+                 )
+      )
+    SELECT         
+        admissions.subject_id,
+        admissions.hadm_id,
+        admissions.admittime,
+        admissions.charttime,
+        admissions.time_to_rslt,
+        org_id
+    FROM admissions
+    WHERE admissions.time_to_rslt is not null
+          and admissions.time_to_rslt > %(time_window_hours)d
+
+"""
     params = {
         'time_window_hours': observation_window_hours
     }
@@ -253,17 +310,32 @@ def query_all_pts_within_observation_window(observation_window_hours):
 
 def remove_dups(df):
     """
-    When more than one microbiology test exists keep first.
-    In case when there are multiple tests use the same timestamp then
-    keep the one with 'RESISTANT_YN' = 1 or first available record
-    when all 'RESISTANT_YN' = 0.
+    If test has multiple records with the same 'charttime' then
+    choose max value for 'RESISTANT_YN' column
+    """
+    # # Sort values
+    # df = df.sort_values(by=['subject_id','hadm_id','admittime','charttime','RESISTANT_YN'],
+    #                    ascending = [True, True, True, True, False])
+    # # Remove duplicates
+    # df = df.drop_duplicates(subset=['subject_id','hadm_id','admittime'], keep='first')
+    
+    # Groupby admission id, admit time and chart time to find ristance max
+    df = df.groupby(['subject_id','hadm_id','admittime','charttime']).agg({'RESISTANT_YN':'max'}).reset_index()
+    
+    return df
+
+
+def remove_dups_multi_label(df):
+    """
+    remove duplicate label. Keep one label per admission.
     """
     # Sort values
-    df = df.sort_values(by=['subject_id','hadm_id','admittime','charttime','RESISTANT_YN'],
-                       ascending = [True, True, True, True, False])
+    df = df.sort_values(by=['subject_id','hadm_id','org_id'],
+                       ascending = [True, True, True])
     # Remove duplicates
-    df = df.drop_duplicates(subset=['subject_id','hadm_id','admittime'], keep='first')
+    df = df.drop_duplicates(subset=['subject_id','hadm_id','org_id'], keep='first')
     return df
+
 
 def observation_window(df, window_size):
     """
@@ -271,8 +343,12 @@ def observation_window(df, window_size):
     to admission time. Select records when the index date
     is before microbiology test results.
     """
+    
     # Index date equals to admit time plus selected observation window
     df['index_date'] = df['admittime'] + pd.to_timedelta(window_size, unit='h')
     # Exclude cases when the diagnosis of resistant bacteria is earlier than index_date
     subset = df[df['index_date'] < df['charttime']]
+    # Keep one label per patient
+    subset = subset.groupby(['subject_id','hadm_id','admittime','index_date']).agg({'RESISTANT_YN':'max'}).reset_index()
+    
     return subset

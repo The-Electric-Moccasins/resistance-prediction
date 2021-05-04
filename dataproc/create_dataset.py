@@ -263,13 +263,12 @@ def intubation_cpt(hadm_ids_table: str):
     return df
 
 
-def noteevents(hadm_ids_table: str, observation_window_hours: float):
+def noteevents(hadm_ids_table: str):
     """
     Query to select note events 
     based on patients' hadm_id
     """
     # hadm_ids = ', '.join(map(str, hadm_ids))
-    time_window_hours = str(observation_window_hours)
     query = f"""
     SELECT 
         addmissions_list.hadm_id,
@@ -281,7 +280,7 @@ def noteevents(hadm_ids_table: str, observation_window_hours: float):
         ON addmissions_list.hadm_id = noteevents.hadm_id
     WHERE 
         iserror IS NULL AND
-        noteevents.charttime <= admissions.admittime + interval '{time_window_hours}' hour 
+        noteevents.charttime <= addmissions_list.index_date
         """
     df = cursor.execute(query).as_pandas()
     return df

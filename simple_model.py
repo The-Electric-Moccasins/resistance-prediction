@@ -16,7 +16,7 @@ params = HyperParams()
 from embeddings.dataloader import TheDataSet
 from embeddings.autoencoder import Autoencoder # so we can load this model
 
-USE_AUTOENCODER = True
+USE_AUTOENCODER = False
 
 
 def get_autoencoder():
@@ -135,8 +135,8 @@ def train_xgboost():
     return xgboost_cls
 
 
-model = train_random_forest()
-# model = train_xgboost()
+# model = train_random_forest()
+model = train_xgboost()
 y_validate_hat = model.predict(X_validate)
 print(f"predictions mean: {np.mean(y_validate_hat)}")
 simple_score = model.score(X_validate, y_validate)

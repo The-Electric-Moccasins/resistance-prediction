@@ -48,7 +48,7 @@ def run(params :HyperParams, binning_numerics=False, create_patients_list_view=T
     df_intubation = load_intubation_procedures(view_name_all_pts_within_observation_window)
 
     # Note Events:
-    notes = load_notes(params, view_name_all_pts_within_observation_window)
+    notes = load_notes(view_name_all_pts_within_observation_window)
 
     df_antibiotics_history = load_antibiotics_history(notes)
 
@@ -597,8 +597,8 @@ def load_antibiotics_history(notes):
     return notes_check
 
 
-def load_notes(params, view_name_all_pts_within_observation_window):
-    notes = create_dataset.noteevents(view_name_all_pts_within_observation_window, params.observation_window_hours)
+def load_notes(view_name_all_pts_within_observation_window):
+    notes = create_dataset.noteevents(view_name_all_pts_within_observation_window)
     # Clean notes
     notes = clean_text(df=notes, text_field='text')
     return notes

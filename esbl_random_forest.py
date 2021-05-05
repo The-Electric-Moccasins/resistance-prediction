@@ -10,17 +10,13 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_val_score
 from sklearn.pipeline import make_pipeline
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
 
 from sklearn.model_selection import learning_curve
 from sklearn.model_selection import validation_curve
-from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import make_scorer
 from sklearn.metrics import f1_score
 from sklearn.metrics import precision_score
-from sklearn.metrics import accuracy_score
 from sklearn.metrics import classification_report
 from sklearn.metrics import confusion_matrix
 
@@ -33,8 +29,8 @@ from dataproc.roc_auc_curves import plt_roc_auc_curve, plt_precision_recall_curv
 RANDOM_STATE = 42
 score_f1 = make_scorer(f1_score, average='binary', pos_label=1)
 score_pr = make_scorer(precision_score, average='binary', pos_label=1)
+
 # Load stored data set
-#fulldata = pd.read_csv('data/fulldata_extra.csv')
 fulldata = pd.read_csv('data/fulldata_cephalosporin.csv')
 
 def plot_learning_curve(X, y, model, scoring, scoring_name):
@@ -216,7 +212,7 @@ if __name__ == "__main__":
     # Classification report (recall, preccision, f-score, accuracy):
     print(classification_report(y_true, y_pred))
     print()
-    tn, fp, fn, tp = confusion_matrix(y_true=y_test, y_pred=y_pred).ravel()
+    tn, fp, fn, tp = confusion_matrix(y_true=y_true, y_pred=y_pred).ravel()
     print('TN:',tn, 'FP:',fp, 'FN:',fn, 'TP:',tp )
     print()
     scores = cross_val_score(forest, X_over_b, y_over_b, scoring=score_f1, cv=5)

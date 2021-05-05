@@ -455,7 +455,7 @@ def pivot_flags_to_columns(df, binning_numerics):
         pass
     else:
         df = df.fillna(0)
-        df = df.astype('uint8')
+        df = df.astype('int8')
     df = df.reset_index(['hadm_id'])
     return df
 

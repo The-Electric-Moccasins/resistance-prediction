@@ -11,7 +11,7 @@ from dataproc.proc_utils import drop_sparse_columns, stanardize_numeric_values, 
 
 from hyper_params import HyperParams
 
-DATA_DIR = 'data'
+from config import DATA_DIR
 
 
 def run(params :HyperParams, binning_numerics=False, create_patients_list_view=True, create_lab_events=True):

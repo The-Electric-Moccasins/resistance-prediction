@@ -1,5 +1,13 @@
 # Early Predictions of ESBL in Hopsitals
 
-`\data`: stores intermediate data files 
-`prepare_datasets.ipynb` : prepare datasets
-`hyper_params.py`: configuration of hyupter parameters
+`hyper_params.py`: Hyper Parameters
+
+`dataset.py`: generates datasets for training and testing
+
+`baseline_model.py`: baseline models
+
+`MLP.py`: MLP model
+
+`config.py`: file location constants, etc.
+
+`requirements.txt`: Dependencies

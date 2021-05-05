@@ -21,7 +21,7 @@ USE_AUTOENCODER = False
 
 def get_autoencoder():
     autoencoder = None
-    with open('data/autoencoder.pic', 'rb') as f:
+    with open('../data/autoencoder.pic', 'rb') as f:
         autoencoder = torch.load(f)
     return autoencoder
 

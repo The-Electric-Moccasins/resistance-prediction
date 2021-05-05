@@ -17,6 +17,7 @@ def build_normal_dataframe(numpy_output_file='fulldata.npy', dataframe_output_fi
     print(f"Created cohort dataset: {df_final_dataset.shape}")
 
     io.write_dataframe(df_cohort, dataframe_output_file)
+    return df_cohort
 
 
 def build_autoencoded_dataframe(numpy_output_file='autoencoded_fulldata.npy', dataframe_output_file='df_autoencoded_cohort'):

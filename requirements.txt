@@ -5,3 +5,4 @@ PyAthena[SQLAlchemy]==2.2.0
 missingno==0.4.2
 imbalanced-learn==0.8.0
 xgboost==1.4.1
+tqdm

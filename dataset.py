@@ -50,14 +50,15 @@ def build_autoencoded_data_matrix(numpy_output_file='autoencoded_fulldata.npy'):
         dataset = TheDataSet(datafile=np_training_datafile)
         print(f"dataset length = {len(dataset)} num features = {dataset.num_features()}")
         from embeddings.autoencoder import Autoencoder
-        from embeddings.train import train
-        model = Autoencoder(num_features=dataset.num_features(), dropout_p=0.1)
+        from embeddings.train import train, plot_loss
+        model = Autoencoder(num_features=dataset.num_features())
         print(model)
         max_epochs = encoder_training_epochs
-        outputs, losses = train(model, dataset=dataset, num_epochs=max_epochs, batch_size=512, learning_rate=1e-3)
+        outputs, losses = train(model, dataset=dataset, num_epochs=max_epochs, batch_size=512, learning_rate=1e-3, denoising=True, denoise_p=0.1)
 
         io.write_serialized_model(model, 'autoencoder')
         print(f"Trained AutoEncoder. Training Data Loss Reached: {losses[-1]} ")
+        plot_loss(losses)
 
     model = io.load_serialized_model('autoencoder')
     

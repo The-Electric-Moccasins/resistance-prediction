@@ -29,13 +29,13 @@ def build_autoencoded_data_matrix(numpy_output_file='autoencoded_fulldata.npy'):
     params = HyperParams()
     
     # 1. build all features dataset, for all 54k admissions
-    if False:
+    if True:
         df_final_dataset_binned = featues_datasets_all_patients.run(params, binning_numerics=True, create_patients_list_view=True, create_lab_events=True)
         print(f"Created full features dataset: {df_final_dataset_binned.shape}")
         io.write_dataframe(df_final_dataset_binned, 'df_final_dataset_binned')
     df_final_dataset_binned = io.load_dataframe('df_final_dataset_binned')
     
-    if False:
+    if True:
         # write AE training data to numpy file
         ae_training_datafile_name = 'autoencoder_training_data.npy'
         np_training_datafile = config.DATA_DIR + '/' + ae_training_datafile_name
@@ -51,7 +51,7 @@ def build_autoencoded_data_matrix(numpy_output_file='autoencoded_fulldata.npy'):
         print(f"dataset length = {len(dataset)} num features = {dataset.num_features()}")
         from embeddings.autoencoder import Autoencoder
         from embeddings.train import train
-        model = Autoencoder(num_features=dataset.num_features())
+        model = Autoencoder(num_features=dataset.num_features(), dropout_p=0.1)
         print(model)
         max_epochs = encoder_training_epochs
         outputs, losses = train(model, dataset=dataset, num_epochs=max_epochs, batch_size=512, learning_rate=1e-3)

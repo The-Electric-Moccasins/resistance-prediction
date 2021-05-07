@@ -14,11 +14,11 @@ class Autoencoder(nn.Module):
             nn.Linear(in_features=num_features // 2, out_features=256, bias=True),
             nn.ReLU(),
             nn.Linear(in_features=256, out_features=128, bias=True),
-            nn.Sigmoid()
+            nn.Tanh()
         )
         self.decoder = nn.Sequential(
             nn.Linear(in_features=128, out_features=256, bias=True),
-            nn.Sigmoid(),
+            nn.Tanh(),
             nn.Linear(in_features=256, out_features=num_features // 2, bias=True),
             nn.ReLU(),
             nn.Linear(in_features=num_features // 2, out_features=num_features, bias=True ),

@@ -106,14 +106,13 @@ def run(params :HyperParams, binning_numerics=False, create_patients_list_view=T
 
 
 
-def save_auto_encoder_training_data(df_features: DataFrame):
+def save_auto_encoder_training_data(df_features: DataFrame, target_datafile = 'data/autoencoder_fulldata.npy'):
     df_temp = df_features.copy()
     df_temp['y'] = np.zeros((df_features.shape[0],))
     if 'hadm_id' in df_temp.columns:
         df_temp = df_temp.drop(columns='hadm_id')
     autoencoder_fulldata = df_temp.to_numpy()
     # Save to a file
-    target_datafile = 'data/autoencoder_fulldata.npy'
     np.save(target_datafile, autoencoder_fulldata)
     print(f"autoencoder training data (with y=0) was saved to {target_datafile}")
 

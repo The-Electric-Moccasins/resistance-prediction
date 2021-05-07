@@ -5,11 +5,11 @@ import torch.nn as nn
 
 
 class Autoencoder(nn.Module):
-    def __init__(self, num_features):
+    def __init__(self, num_features, dropout_p=0.1):
         super(Autoencoder, self).__init__()
         self.encoder = nn.Sequential(
             nn.Linear(in_features=num_features, out_features=num_features // 2 , bias=True),
-            nn.Dropout(p = 0.1),
+            nn.Dropout(p = dropout_p),
             nn.ReLU(),
             nn.Linear(in_features=num_features // 2, out_features=256, bias=True),
             nn.ReLU(),

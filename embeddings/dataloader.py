@@ -5,7 +5,7 @@ import numpy as np
 
 class TheDataSet(Dataset):
 
-    def __init__(self, datafile='data/fulldata.npy', pad_to_360=True):
+    def __init__(self, datafile='data/fulldata.npy'):
         """
         Args:
             datafile (string): Path to the data file
@@ -15,9 +15,6 @@ class TheDataSet(Dataset):
         self.y = fulldata[:, -1]
         _, vector_len = self.X.shape
 
-        #
-        if pad_to_360:
-            self.X = np.pad(self.X, ((0, 0), (0, 360 - vector_len)), 'constant', constant_values=(0, 0))
 
     def __len__(self):
         return len(self.y)

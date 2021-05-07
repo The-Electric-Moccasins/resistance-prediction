@@ -6,6 +6,7 @@ Created on Tue May  4 19:24:20 2021
 """
 import numpy as np
 import pandas as pd
+from dataproc.roc_auc_curves import plt_roc_auc_curve, plt_precision_recall_curve
 
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import cross_val_score
@@ -99,5 +100,27 @@ def model_performance(model, y_true, y_pred):
     tn, fp, fn, tp = confusion_matrix(y_true=y_true, y_pred=y_pred).ravel()
     print('TN:',tn, 'FP:',fp, 'FN:',fn, 'TP:',tp )
     print()
+    
+
+def RandomForest(data, random_state=RANDOM_STATE):
+    """
+    Run and Evaluate Baseline Model
+    """
+    # Split data into train and test sets:
+    X_train, X_test, y_train, y_test = split_dataset(data, test_size=0.1)
+    # Oversample minority class:
+    X_over, y_over = oversample_minority_class(X_train, y_train, random_state=RANDOM_STATE)
+    # Plot of Original vs. Oversampled Training Set:
+    original_oversampled_plot(y_train, y_over)
+    # Random Forest Model:
+    forest = random_forest_model(X_over, y_over)
+    # Prediction
+    y_true, y_pred = y_test, forest.predict(X_test)
+    # Model Performance
+    model_performance(forest, y_true, y_pred)
+    # ROC - AUC and Precision - Recall Curves:
+    plt_roc_auc_curve(forest, X_test, y_test, model_name='Rand Forest') 
+    plt_precision_recall_curve(forest, X_test, y_test, model_name='Rand Forest')
+
     
     

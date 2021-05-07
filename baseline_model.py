@@ -16,33 +16,52 @@ from sklearn.metrics import confusion_matrix
 from imblearn.over_sampling import RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
 from collections import Counter
+import matplotlib.pyplot as plt
+import seaborn as sns
+RANDOM_STATE = 42
 
-
-
-def split_dataset(data, test_size, random_state=42):
-    y = data['RESISTANT_YN']
-    X = data.drop(columns=['RESISTANT_YN'])
+def split_dataset(data, test_size, random_state=RANDOM_STATE):
+    y = data[data.columns[-1]]
+    X = data.drop(columns=data.columns[-1])
     X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=test_size, random_state=random_state)
     print('Training Set: ', Counter(y_train))
     return X_train, X_test, y_train, y_test
 
 
-def oversample_minority_class(X_train, y_train):
+def oversample_minority_class(X_train, y_train, random_state=RANDOM_STATE):
     # Oversample minority class
-    oversample = RandomOverSampler(sampling_strategy = 'minority')
+    oversample = RandomOverSampler(sampling_strategy = 'minority', random_state=RANDOM_STATE)
     # fit and apply the transform
     X_over, y_over = oversample.fit_resample(X_train, y_train)
     print('Oversampling: ', Counter(y_over))
     return X_over, y_over
 
 
-def undersample_majority_class(X_train, y_train, sampling_strategy = 0.55):
+def undersample_majority_class(X_train, y_train, sampling_strategy = 0.55, random_state=RANDOM_STATE):
     # Undersample majority class
-    undersample = RandomUnderSampler(sampling_strategy = sampling_strategy)
+    undersample = RandomUnderSampler(sampling_strategy = sampling_strategy, random_state=RANDOM_STATE)
     # fit and apply the transform
     X_under, y_under = undersample.fit_resample(X_train, y_train)
     print('Undersampling: ', Counter(y_under))
     return X_under, y_under
+
+def original_oversampled_plot(y_train, y_over):
+    original_cnt = Counter(y_train)
+    oversmpl_cnt = Counter(y_over)
+
+    d = {'training set': ['original','original','oversampled','oversampled'],
+         'class': [0,1,0,1], 
+         'count': [original_cnt[0] , original_cnt[1], oversmpl_cnt[0], oversmpl_cnt[1]]}
+    df = pd.DataFrame(data=d)
+
+    # who v/s fare barplot
+    sns.barplot(x = 'training set', y = 'count', hue='class', data = df)
+
+
+    # Show the plot
+    plt.title('Original vs. Oversampled Training Set')
+    plt.ylim([0, 5000])
+    plt.show()
 
 
 def random_forest_model(X, y, random_state=42):

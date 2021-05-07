@@ -18,4 +18,4 @@ class HyperParams():
         self.train_set_fraction = 0.80
         self.random_state = 11
         self.num_of_bins_for_numerics = 6
-        self.encoder_training_epochs = 200
+        self.encoder_training_epochs = 170

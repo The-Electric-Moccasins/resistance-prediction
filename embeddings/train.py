@@ -27,12 +27,12 @@ def train(model, dataset, num_epochs=5, batch_size=64, learning_rate=1e-3, denoi
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model = model.to(device)
     torch.manual_seed(42)
-    criterion = nn.MSELoss() # mean square error loss
-#     criterion = nn.L1Loss()
-#     criterion = nn.BCELoss()
+    #criterion = nn.MSELoss() # mean square error loss
+    #criterion = nn.L1Loss()
+    criterion = nn.BCELoss()
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=learning_rate, 
-                                 weight_decay=1e-5) # <--
+                                 weight_decay=1e-5)
     train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
     outputs = []
     losses = []

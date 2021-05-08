@@ -25,11 +25,10 @@ def build_normal_dataframe(numpy_output_file='fulldata.npy', dataframe_output_fi
     return df_cohort
 
 
-def build_autoencoded_data_matrix(numpy_output_file='autoencoded_fulldata.npy'):
-    params = HyperParams()
+def build_autoencoded_data_matrix(numpy_output_file='autoencoded_fulldata.npy', params = HyperParams()):
     
     # 1. build all features dataset, for all 54k admissions
-    if True:
+    if False:
         df_final_dataset_binned = featues_datasets_all_patients.run(params, binning_numerics=True, create_patients_list_view=True, create_lab_events=True)
         print(f"Created full features dataset: {df_final_dataset_binned.shape}")
         io.write_dataframe(df_final_dataset_binned, 'df_final_dataset_binned')

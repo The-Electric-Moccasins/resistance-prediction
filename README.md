@@ -33,11 +33,11 @@ python demo.py
 
 ## Processing Flow
 
-![alt text](./images/ESBL Prediction Architecture-Data Flow.png "Processing Flow")
+![Processing Flow](./images/data_flow.png)
 
 ## Data Sources
 
-![alt text](./images/ESBL Prediction Architecture-Data Sources.png "Data Sources")
+![alt text]('./images/data_sources.png')
 
 
 ### Navigation:

@@ -37,7 +37,7 @@ python demo.py
 
 ## Data Sources
 
-![alt text]('./images/data_sources.png')
+![alt text](./images/data_sources.png)
 
 
 ### Navigation:

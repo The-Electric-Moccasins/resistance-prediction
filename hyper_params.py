@@ -13,7 +13,7 @@ class HyperParams():
             80002  #ESCHERICHIA COLI
         ]
         self.negative_to_positive_ratio = 3.0
-        self.test_set_fraction = 0.10
+        self.test_set_fraction = 0.30
         self.validation_set_fraction = 0.10
         self.train_set_fraction = 0.80
         self.random_state = 11
